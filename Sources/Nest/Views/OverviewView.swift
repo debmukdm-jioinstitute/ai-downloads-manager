@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct OverviewView: View {
     @EnvironmentObject var appState: AppState
@@ -14,10 +15,18 @@ struct OverviewView: View {
 
                 let stats = appState.dashboardStats()
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
-                    statCard(value: "\(stats.totalFiles)", label: "Files", icon: "doc.on.doc")
-                    statCard(value: "\(stats.unorganized)", label: "Unorganized", icon: "questionmark.folder")
-                    statCard(value: "\(stats.suggestedActions)", label: "Suggested Actions", icon: "sparkles")
-                    statCard(value: formatBytes(stats.storageUsedBytes), label: "Storage Used", icon: "internaldrive")
+                    statCard(value: "\(stats.totalFiles)", label: "Files", icon: "doc.on.doc") {
+                        appState.selectedSidebarSection = .allFiles
+                    }
+                    statCard(value: "\(stats.unorganized)", label: "Unorganized", icon: "questionmark.folder") {
+                        appState.selectedSidebarSection = .categories
+                    }
+                    statCard(value: "\(stats.suggestedActions)", label: "Suggested Actions", icon: "sparkles") {
+                        appState.selectedSidebarSection = .rules
+                    }
+                    // Storage Used has nowhere meaningful to navigate to, so it
+                    // stays a plain info card rather than faking clickability.
+                    statCard(value: formatBytes(stats.storageUsedBytes), label: "Storage Used", icon: "internaldrive", action: nil)
                 }
 
                 HStack {
@@ -29,13 +38,7 @@ struct OverviewView: View {
                 .foregroundStyle(.secondary)
 
                 if let folder = appState.downloadsFolder {
-                    HStack {
-                        Image(systemName: appState.isMonitoring ? "dot.radiowaves.left.and.right" : "pause.circle")
-                            .foregroundStyle(appState.isMonitoring ? .green : .secondary)
-                        Text("Watching \(folder.path)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    WatchedFolderRow(folder: folder, isMonitoring: appState.isMonitoring)
                 }
 
                 let attentionItems = appState.expiryRecords().filter {
@@ -46,21 +49,7 @@ struct OverviewView: View {
                     Divider().padding(.vertical, 4)
                     Text("Today's Attention").font(.headline)
                     ForEach(attentionItems.prefix(5)) { record in
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                            let days = record.daysRemaining()
-                            Text(days < 0
-                                 ? "\(record.title) — expired \(-days) day\(-days == 1 ? "" : "s") ago"
-                                 : "\(record.title) — \(record.eventType.displayName.lowercased()) in \(days) day\(days == 1 ? "" : "s")")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.callout)
-                        .padding(.vertical, 4)
-                        .contentShape(Rectangle())
-                        .onTapGesture { selectedExpiryRecord = record }
+                        AttentionRow(record: record) { selectedExpiryRecord = record }
                     }
                 }
 
@@ -87,15 +76,8 @@ struct OverviewView: View {
         }
     }
 
-    private func statCard(value: String, label: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: icon).foregroundStyle(.secondary)
-            Text(value).font(.title.bold())
-            Text(label).font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
+    private func statCard(value: String, label: String, icon: String, action: (() -> Void)?) -> some View {
+        StatCard(value: value, label: label, icon: icon, action: action)
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
@@ -103,8 +85,99 @@ struct OverviewView: View {
     }
 }
 
+private struct StatCard: View {
+    let value: String
+    let label: String
+    let icon: String
+    let action: (() -> Void)?
+    @State private var isHovering = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: icon).foregroundStyle(.secondary)
+                Spacer()
+                if action != nil {
+                    Image(systemName: "arrow.right").font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+            Text(value).font(.title.bold())
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            .quaternary.opacity((isHovering && action != nil) ? 0.6 : 0.4),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { action?() }
+        .onHover { hovering in
+            guard action != nil else { return }
+            isHovering = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+}
+
+private struct AttentionRow: View {
+    let record: ExpiryRecord
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            let days = record.daysRemaining()
+            Text(days < 0
+                 ? "\(record.title) — expired \(-days) day\(-days == 1 ? "" : "s") ago"
+                 : "\(record.title) — \(record.eventType.displayName.lowercased()) in \(days) day\(days == 1 ? "" : "s")")
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .font(.callout)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(.quaternary.opacity(isHovering ? 0.35 : 0), in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+}
+
+private struct WatchedFolderRow: View {
+    let folder: URL
+    let isMonitoring: Bool
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack {
+            Image(systemName: isMonitoring ? "dot.radiowaves.left.and.right" : "pause.circle")
+                .foregroundStyle(isMonitoring ? .green : .secondary)
+            Text("Watching \(folder.path)")
+                .font(.caption)
+                .foregroundStyle(isHovering ? .primary : .secondary)
+            Image(systemName: "arrow.up.forward.square")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+}
+
 struct FileRow: View {
     let file: FileRecord
+    @State private var isHovering = false
 
     var body: some View {
         HStack {
@@ -122,9 +195,18 @@ struct FileRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(.quaternary.opacity(isHovering ? 0.35 : 0), in: RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
     }
 
     private func iconName(for ext: String) -> String {
