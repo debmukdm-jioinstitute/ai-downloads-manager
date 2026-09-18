@@ -1,0 +1,126 @@
+import Foundation
+import SwiftUI
+import Combine
+
+@MainActor
+final class AppState: ObservableObject {
+    @Published var hasCompletedOnboarding: Bool
+    @Published var downloadsFolder: URL?
+    @Published var aiEnabled: Bool {
+        didSet { UserDefaults.standard.set(aiEnabled, forKey: "aiEnabled") }
+    }
+    @Published var hasSeenAIConsent: Bool {
+        didSet { UserDefaults.standard.set(hasSeenAIConsent, forKey: "hasSeenAIConsent") }
+    }
+    @Published var isMonitoring = false
+    @Published var lastError: String?
+
+    let store: LibraryStore
+    private var monitor: FolderMonitor?
+    private var pipeline: FileIngestPipeline?
+    private var cancellables: Set<AnyCancellable> = []
+
+    init(store: LibraryStore) {
+        self.store = store
+        self.hasCompletedOnboarding = FolderAccessStore.hasSavedFolder
+        self.downloadsFolder = FolderAccessStore.resolve()
+        self.aiEnabled = UserDefaults.standard.bool(forKey: "aiEnabled")
+        self.hasSeenAIConsent = UserDefaults.standard.bool(forKey: "hasSeenAIConsent")
+
+        self.pipeline = FileIngestPipeline(
+            store: store,
+            aiServiceProvider: { [weak self] in self?.makeAIService() ?? NullAIService() },
+            aiEnabledProvider: { [weak self] in (self?.aiEnabled ?? false) && KeychainService.hasAPIKey }
+        )
+
+        store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+
+        if let folder = downloadsFolder {
+            startMonitoring(folder: folder)
+        }
+    }
+
+    func makeAIService() -> AIService {
+        guard aiEnabled, let key = KeychainService.loadAPIKey(), !key.isEmpty else { return NullAIService() }
+        return ClaudeAIService(apiKey: key)
+    }
+
+    func chooseFolder(_ url: URL) {
+        FolderAccessStore.save(url: url)
+        downloadsFolder = url
+        hasCompletedOnboarding = true
+        startMonitoring(folder: url)
+        scanExistingFiles(in: url)
+    }
+
+    func startMonitoring(folder: URL) {
+        monitor?.stop()
+        monitor = FolderMonitor(folderURL: folder) { [weak self] paths in
+            guard let self else { return }
+            Task { await self.handleChangedPaths(paths) }
+        }
+        monitor?.start()
+        isMonitoring = true
+    }
+
+    func scanExistingFiles(in folder: URL) {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
+        let paths = entries.filter { !$0.hasDirectoryPath }.map { $0.path }
+        Task { await handleChangedPaths(paths) }
+    }
+
+    private func handleChangedPaths(_ paths: [String]) async {
+        guard let pipeline else { return }
+        for path in paths {
+            await pipeline.ingest(path: path)
+        }
+    }
+
+    func organizer() -> FileOrganizerService? {
+        guard let folder = downloadsFolder else { return nil }
+        return FileOrganizerService(store: store, rootFolder: folder)
+    }
+
+    // MARK: - Dashboard queries
+
+    func allFiles() -> [FileRecord] {
+        store.fileRecords.sorted { $0.dateDownloaded > $1.dateDownloaded }
+    }
+
+    func recentActivity(limit: Int = 50) -> [ActivityEvent] {
+        Array(store.activity.prefix(limit))
+    }
+
+    func rules() -> [OrganizationRule] {
+        store.rules
+    }
+
+    struct DashboardStats {
+        var filesProcessedToday: Int
+        var filesProcessedThisWeek: Int
+        var unorganized: Int
+        var suggestedActions: Int
+        var storageUsedBytes: Int64
+        var totalFiles: Int
+    }
+
+    func dashboardStats() -> DashboardStats {
+        let files = allFiles()
+        let calendar = Calendar.current
+        let now = Date()
+        let todayCount = files.filter { calendar.isDate($0.dateDownloaded, inSameDayAs: now) }.count
+        let weekStart = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        let weekCount = files.filter { $0.dateDownloaded >= weekStart }.count
+        let unorganized = files.filter { $0.category == "Other" || $0.processingStatus == .needsReview }.count
+        let totalSize = files.reduce(Int64(0)) { $0 + $1.fileSize }
+        return DashboardStats(
+            filesProcessedToday: todayCount,
+            filesProcessedThisWeek: weekCount,
+            unorganized: unorganized,
+            suggestedActions: unorganized,
+            storageUsedBytes: totalSize,
+            totalFiles: files.count
+        )
+    }
+}
