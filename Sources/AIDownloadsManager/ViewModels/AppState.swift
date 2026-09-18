@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     @Published var lastError: String?
 
     let store: LibraryStore
+    let ollamaSetup = OllamaSetupCoordinator()
     private var monitor: FolderMonitor?
     private var pipeline: FileIngestPipeline?
     private var cancellables: Set<AnyCancellable> = []
@@ -33,7 +34,7 @@ final class AppState: ObservableObject {
         self.aiEnabled = UserDefaults.standard.bool(forKey: "aiEnabled")
         self.hasSeenAIConsent = UserDefaults.standard.bool(forKey: "hasSeenAIConsent")
         self.ollamaHost = UserDefaults.standard.string(forKey: "ollamaHost") ?? "http://localhost:11434"
-        self.ollamaModel = UserDefaults.standard.string(forKey: "ollamaModel") ?? "llama3.2"
+        self.ollamaModel = UserDefaults.standard.string(forKey: "ollamaModel") ?? "llama3.2:1b"
 
         self.pipeline = FileIngestPipeline(
             store: store,
@@ -42,6 +43,14 @@ final class AppState: ObservableObject {
         )
 
         store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        ollamaSetup.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        ollamaSetup.$stage
+            .sink { [weak self] stage in
+                guard let self, stage == .ready else { return }
+                self.aiEnabled = true
+                self.hasSeenAIConsent = true
+            }
+            .store(in: &cancellables)
 
         if let folder = downloadsFolder {
             startMonitoring(folder: folder)
@@ -53,12 +62,18 @@ final class AppState: ObservableObject {
         return OllamaAIService(host: ollamaHost, model: ollamaModel)
     }
 
-    func chooseFolder(_ url: URL) {
+    /// Used by onboarding: picks the folder without finishing onboarding yet,
+    /// so the AI setup step can run before landing on the dashboard.
+    func selectFolder(_ url: URL) {
         FolderAccessStore.save(url: url)
         downloadsFolder = url
-        hasCompletedOnboarding = true
         startMonitoring(folder: url)
         scanExistingFiles(in: url)
+    }
+
+    func chooseFolder(_ url: URL) {
+        selectFolder(url)
+        hasCompletedOnboarding = true
     }
 
     func startMonitoring(folder: URL) {

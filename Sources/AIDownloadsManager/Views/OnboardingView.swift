@@ -4,8 +4,23 @@ import AppKit
 struct OnboardingView: View {
     @EnvironmentObject var appState: AppState
     @State private var chosenFolder: URL?
+    @State private var step: Step = .folder
+
+    enum Step {
+        case folder
+        case aiSetup
+    }
 
     var body: some View {
+        switch step {
+        case .folder:
+            folderStep
+        case .aiSetup:
+            aiSetupStep
+        }
+    }
+
+    private var folderStep: some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -44,7 +59,8 @@ struct OnboardingView: View {
 
                 Button("Continue") {
                     if let chosenFolder {
-                        appState.chooseFolder(chosenFolder)
+                        appState.selectFolder(chosenFolder)
+                        step = .aiSetup
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -56,6 +72,42 @@ struct OnboardingView: View {
         .onAppear {
             chosenFolder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         }
+    }
+
+    private var aiSetupStep: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "sparkles").font(.system(size: 48)).foregroundStyle(.tint)
+            Text("Set up local AI?")
+                .font(.title.bold())
+            Text("This app can classify your files with a free AI model that runs entirely on this Mac (Ollama) — no account, no API key, no usage limit, nothing ever leaves your machine. Setup is automatic and only needs to happen once.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 460)
+
+            OllamaSetupStatusView(
+                coordinator: appState.ollamaSetup,
+                host: appState.ollamaHost,
+                model: appState.ollamaModel,
+                autoStart: true,
+                onReady: { finish() }
+            )
+            .frame(maxWidth: 460)
+
+            Spacer()
+
+            Button("Skip — I'll set this up later", action: finish)
+                .padding(.bottom, 40)
+        }
+        .padding(40)
+    }
+
+    private func finish() {
+        if appState.ollamaSetup.stage != .ready {
+            appState.hasSeenAIConsent = true
+        }
+        appState.hasCompletedOnboarding = true
     }
 
     private func featureRow(_ icon: String, _ text: String) -> some View {

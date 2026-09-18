@@ -35,19 +35,27 @@ swift run
 This opens a real windowed SwiftUI app (App Sandbox / notarization aren't
 configured in this SPM form — do that when you migrate to an Xcode app target).
 
-### Optional: enable AI classification
+### Optional: enable AI classification — fully automatic
 
-1. Install [Ollama](https://ollama.com) and pull a model:
-   ```bash
-   ollama pull llama3.2
-   ```
-2. In the app: Settings ▸ AI Processing ▸ Test Connection ▸ toggle "Enable AI
-   classification (Ollama)". You'll see a consent screen explaining that
-   extracted text is sent to the local model (never the files themselves,
-   never over the internet).
+No terminal commands required. During onboarding (or later in Settings ▸ AI
+Processing), the app walks through setup itself:
 
-Everything works without Ollama running — you just get local/rule-based
-classification instead.
+1. Checks whether [Ollama](https://ollama.com) is installed and running.
+2. If it's already running, skips straight to step 4.
+3. If it's installed but not running, starts it. If it isn't installed at
+   all, offers a one-click "Install via Homebrew" (only if Homebrew is
+   present — this is the one step that changes anything outside the app, so
+   it's the one step that always waits for an explicit click) or a link to
+   download it manually.
+4. Automatically pulls the default model (`llama3.2:1b`, ~1.3GB, chosen for a
+   fast first run) via Ollama's own API, with a live progress bar.
+5. Enables AI classification once the model is ready.
+
+`OllamaSetupCoordinator` drives this state machine and is shared between the
+onboarding screen and Settings, so a setup started in one place shows live in
+the other. Everything works without Ollama at all — you just get
+local/rule-based classification instead, and can turn AI on later whenever
+you want.
 
 ## What's implemented
 

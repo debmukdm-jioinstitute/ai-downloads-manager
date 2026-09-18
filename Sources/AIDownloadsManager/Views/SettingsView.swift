@@ -5,12 +5,6 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingConsent = false
     @State private var availableModels: [String] = []
-    @State private var connectionStatus: ConnectionStatus = .unknown
-    @State private var isTesting = false
-
-    enum ConnectionStatus {
-        case unknown, reachable, unreachable
-    }
 
     var body: some View {
         Form {
@@ -27,7 +21,7 @@ struct SettingsView: View {
                 Toggle("Enable AI classification (Ollama)", isOn: Binding(
                     get: { appState.aiEnabled },
                     set: { newValue in
-                        if newValue && !appState.hasSeenAIConsent {
+                        if newValue && appState.ollamaSetup.stage != .ready {
                             showingConsent = true
                         } else {
                             appState.aiEnabled = newValue
@@ -35,25 +29,22 @@ struct SettingsView: View {
                     }
                 ))
 
-                TextField("Ollama host", text: $appState.ollamaHost)
-                TextField("Model (e.g. llama3.2, mistral, qwen2.5)", text: $appState.ollamaModel)
+                OllamaSetupStatusView(coordinator: appState.ollamaSetup, host: appState.ollamaHost, model: appState.ollamaModel)
 
-                HStack {
-                    Button("Test Connection") { Task { await testConnection() } }
-                        .disabled(isTesting)
-                    if isTesting {
-                        ProgressView().controlSize(.small)
+                DisclosureGroup("Advanced") {
+                    TextField("Ollama host", text: $appState.ollamaHost)
+                    TextField("Model (e.g. llama3.2:1b, mistral, qwen2.5)", text: $appState.ollamaModel)
+                    if !availableModels.isEmpty {
+                        Picker("Installed models", selection: $appState.ollamaModel) {
+                            ForEach(availableModels, id: \.self) { Text($0).tag($0) }
+                        }
                     }
-                    statusView
-                }
-
-                if !availableModels.isEmpty {
-                    Picker("Installed models", selection: $appState.ollamaModel) {
-                        ForEach(availableModels, id: \.self) { Text($0).tag($0) }
+                    Button("Refresh installed models") {
+                        Task { availableModels = await OllamaAIService.listModels(host: appState.ollamaHost) ?? [] }
                     }
                 }
 
-                Text("Local processing (metadata, hashing, PDF text, OCR) always runs on-device. When AI is enabled, extracted text is sent to Ollama — a free, open-source model running entirely on this Mac at \(appState.ollamaHost). Nothing ever leaves your machine, and there's no API key, quota, or per-use cost. Install Ollama from ollama.com and run \"ollama pull \(appState.ollamaModel.isEmpty ? "llama3.2" : appState.ollamaModel)\" if you haven't already.")
+                Text("Local processing (metadata, hashing, PDF text, OCR) always runs on-device. When AI is enabled, extracted text is sent to Ollama — a free, open-source model running entirely on this Mac. Nothing ever leaves your machine, and there's no API key, quota, or per-use cost.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -68,12 +59,10 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .sheet(isPresented: $showingConsent) {
             AIConsentSheet(
+                setup: appState.ollamaSetup,
                 host: appState.ollamaHost,
-                onEnable: {
-                    appState.hasSeenAIConsent = true
-                    appState.aiEnabled = true
-                    showingConsent = false
-                },
+                model: appState.ollamaModel,
+                onReady: { showingConsent = false },
                 onDecline: {
                     appState.hasSeenAIConsent = true
                     appState.aiEnabled = false
@@ -81,27 +70,9 @@ struct SettingsView: View {
                 }
             )
         }
-        .task { await testConnection() }
-    }
-
-    @ViewBuilder
-    private var statusView: some View {
-        switch connectionStatus {
-        case .unknown:
-            EmptyView()
-        case .reachable:
-            Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
-        case .unreachable:
-            Label("Not reachable", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption)
+        .task {
+            availableModels = await OllamaAIService.listModels(host: appState.ollamaHost) ?? []
         }
-    }
-
-    private func testConnection() async {
-        isTesting = true
-        let models = await OllamaAIService.listModels(host: appState.ollamaHost)
-        availableModels = models ?? []
-        connectionStatus = models == nil ? .unreachable : .reachable
-        isTesting = false
     }
 
     private func chooseFolder() {
