@@ -136,7 +136,7 @@ enum ExpiryContextClassifier {
 
     private static func roleAndConfidence(forContext context: String) -> (ExpiryEventType, Double) {
         for rule in keywordRules {
-            if rule.patterns.contains(where: { context.contains($0) }) {
+            if rule.patterns.contains(where: { TextMatching.containsWord(context, $0) }) {
                 return (rule.eventType, rule.confidence)
             }
         }
@@ -150,7 +150,7 @@ enum ExpiryContextClassifier {
     static func categoryGuess(forDocumentType documentType: String?, filename: String) -> String {
         let lower = ((documentType ?? "") + " " + filename).lowercased()
         for rule in categoryKeywords {
-            if rule.patterns.contains(where: { lower.contains($0) }) {
+            if rule.patterns.contains(where: { TextMatching.containsWord(lower, $0) }) {
                 return rule.category
             }
         }
@@ -160,7 +160,7 @@ enum ExpiryContextClassifier {
     private static func category(forContext context: String, filename: String) -> String {
         let lowerFilename = filename.lowercased()
         for rule in categoryKeywords {
-            if rule.patterns.contains(where: { context.contains($0) || lowerFilename.contains($0) }) {
+            if rule.patterns.contains(where: { TextMatching.containsWord(context, $0) || TextMatching.containsWord(lowerFilename, $0) }) {
                 return rule.category
             }
         }

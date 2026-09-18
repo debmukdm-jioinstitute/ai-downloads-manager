@@ -7,6 +7,8 @@ struct SettingsView: View {
     @State private var showingConsent = false
     @State private var availableModels: [String] = []
     @State private var voicePermissionDenied = false
+    @State private var showingCleanupConfirm = false
+    @State private var cleanupResultMessage: String?
 
     var body: some View {
         Form {
@@ -15,8 +17,21 @@ struct SettingsView: View {
                     Text(appState.downloadsFolder?.path ?? "Not set")
                         .foregroundStyle(.secondary)
                     Spacer()
+                    Button("Rescan Now") {
+                        if let folder = appState.downloadsFolder { appState.scanExistingFiles(in: folder) }
+                    }
+                    .disabled(appState.downloadsFolder == nil)
                     Button("Change...") { chooseFolder() }
                 }
+
+                Button("Clean Up Library…") { showingCleanupConfirm = true }
+                    .disabled(appState.downloadsFolder == nil)
+                if let cleanupResultMessage {
+                    Text(cleanupResultMessage).font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Removes indexed entries that aren't actually inside the folder above (e.g. leftovers from previously watching a different folder). Only removes Nest's own index — never touches your real files.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("AI Processing (Free, Local, Unlimited)") {
@@ -137,6 +152,17 @@ struct SettingsView: View {
         }
         .task {
             availableModels = await OllamaAIService.listModels(host: appState.ollamaHost) ?? []
+        }
+        .alert("Clean Up Library?", isPresented: $showingCleanupConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clean Up") {
+                let removed = appState.cleanUpLibrary()
+                cleanupResultMessage = removed == 0
+                    ? "Nothing to clean up — everything indexed is inside \(appState.downloadsFolder?.path ?? "the watched folder")."
+                    : "Removed \(removed) indexed entr\(removed == 1 ? "y" : "ies") that weren't inside \(appState.downloadsFolder?.path ?? "the watched folder"). Your actual files were never touched."
+            }
+        } message: {
+            Text("This removes any indexed file entries that aren't inside \(appState.downloadsFolder?.path ?? "the watched folder") — for example, leftovers from previously watching a different folder. It only affects Nest's own index; your real files on disk are never touched or deleted.")
         }
     }
 

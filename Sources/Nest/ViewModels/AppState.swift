@@ -110,9 +110,58 @@ final class AppState: ObservableObject {
         // real user action.
 
         if let folder = downloadsFolder {
-            store.pruneFileRecords(notDirectChildrenOf: folder)
             startMonitoring(folder: folder)
         }
+        reclassifyLocallyClassifiedFiles()
+    }
+
+    /// Explicit, user-initiated cleanup for records that don't belong under
+    /// the currently-watched folder (leftover pollution from before
+    /// FolderMonitor/FileIngestPipeline rejected nested paths, or from having
+    /// pointed Nest at a different folder previously). Deliberately NOT run
+    /// automatically at launch: doing that once silently deleted 285 good
+    /// records because the watched-folder *setting itself* had been changed
+    /// (to iCloud Drive) — an automatic prune trusts that setting completely,
+    /// and a wrong or changed setting makes it a silent, un-confirmed mass
+    /// deletion. It only ever removes index/metadata, never the real files.
+    @discardableResult
+    func cleanUpLibrary() -> Int {
+        guard let folder = downloadsFolder else { return 0 }
+        return store.pruneFileRecords(notDirectChildrenOf: folder)
+    }
+
+    /// Self-heal for a real classification bug: naive substring keyword
+    /// matching classified anything mentioning "billion"/"billing" as an
+    /// invoice (the word "bill" matched inside them). Fixing the matcher
+    /// only prevents *future* misclassification, so this re-runs local
+    /// classification (cheap, offline, idempotent) once at launch for every
+    /// record that was never AI-classified (no aiSummary — the exact
+    /// signature of a local-only classification) and that the user hasn't
+    /// already approved or corrected, so already-fixed and user-confirmed
+    /// files are never silently overwritten.
+    private func reclassifyLocallyClassifiedFiles() {
+        var changed = false
+        for record in store.fileRecords where record.aiSummary == nil && !record.userApprovedClassification {
+            let local = ClassificationEngine.classify(
+                filename: record.filename,
+                fileExtension: record.fileExtension,
+                extractedText: record.extractedText,
+                ocrText: record.ocrText
+            )
+            guard local.category != record.category || local.subcategory != record.subcategory else { continue }
+            record.category = local.category
+            record.subcategory = local.subcategory
+            record.tags = local.tags
+            record.detectedVendor = local.vendor
+            record.detectedDocumentType = local.documentType
+            record.detectedAmount = local.amount
+            record.detectedCurrency = local.currency
+            record.aiConfidence = local.confidence
+            record.classificationReason = local.reason
+            record.processingStatus = local.confidence < CategoryTaxonomy.reviewConfidenceThreshold ? .needsReview : .processed
+            changed = true
+        }
+        if changed { store.saveFiles() }
     }
 
     func makeAIService() -> AIService {

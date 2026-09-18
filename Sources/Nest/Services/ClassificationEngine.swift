@@ -46,22 +46,22 @@ enum ClassificationEngine {
             return LocalClassification(category: "Other", subcategory: "Uncategorized", tags: ["archive"], vendor: nil, documentType: "archive", amount: nil, currency: nil, confidence: 0.5, reason: "ZIP archives are not opened automatically; classify by filename only.")
         }
 
-        if containsAny(text, invoiceWords) || lowerName.contains("invoice") {
+        if containsAny(text, invoiceWords) || TextMatching.containsWord(lowerName, "invoice") {
             return LocalClassification(category: "Finance", subcategory: "Invoices", tags: ["invoice"], vendor: extractVendor(from: text) ?? extractVendor(from: lowerName), documentType: "invoice", amount: extractAmount(from: text), currency: extractCurrency(from: text), confidence: 0.75, reason: "Text/filename contains invoice-related keywords.")
         }
-        if containsAny(text, receiptWords) || lowerName.contains("receipt") {
+        if containsAny(text, receiptWords) || TextMatching.containsWord(lowerName, "receipt") {
             return LocalClassification(category: "Finance", subcategory: "Receipts", tags: ["receipt"], vendor: extractVendor(from: text) ?? extractVendor(from: lowerName), documentType: "receipt", amount: extractAmount(from: text), currency: extractCurrency(from: text), confidence: 0.7, reason: "Text/filename contains receipt-related keywords.")
         }
-        if containsAny(text, statementWords) || lowerName.contains("statement") {
+        if containsAny(text, statementWords) || TextMatching.containsWord(lowerName, "statement") {
             return LocalClassification(category: "Finance", subcategory: "Statements", tags: ["statement"], vendor: extractVendor(from: text), documentType: "statement", amount: nil, currency: extractCurrency(from: text), confidence: 0.65, reason: "Text/filename contains bank/account statement keywords.")
         }
-        if containsAny(text, taxWords) || lowerName.contains("tax") {
+        if containsAny(text, taxWords) || TextMatching.containsWord(lowerName, "tax") {
             return LocalClassification(category: "Finance", subcategory: "Tax Documents", tags: ["tax"], vendor: nil, documentType: "tax document", amount: nil, currency: nil, confidence: 0.6, reason: "Text/filename contains tax-related keywords.")
         }
-        if containsAny(text, ticketWords) || lowerName.contains("ticket") || lowerName.contains("boarding") {
+        if containsAny(text, ticketWords) || TextMatching.containsWord(lowerName, "ticket") || TextMatching.containsWord(lowerName, "boarding") {
             return LocalClassification(category: "Personal", subcategory: "Tickets", tags: ["travel"], vendor: nil, documentType: "ticket", amount: nil, currency: nil, confidence: 0.7, reason: "Text/filename contains travel ticket keywords.")
         }
-        if containsAny(text, assignmentWords) || lowerName.contains("assignment") {
+        if containsAny(text, assignmentWords) || TextMatching.containsWord(lowerName, "assignment") {
             return LocalClassification(category: "Education", subcategory: "Assignments", tags: ["assignment"], vendor: nil, documentType: "assignment", amount: nil, currency: nil, confidence: 0.65, reason: "Text/filename contains assignment/homework keywords.")
         }
         if containsAny(text, researchWords) {
@@ -86,7 +86,7 @@ enum ClassificationEngine {
     }
 
     private static func containsAny(_ haystack: String, _ needles: [String]) -> Bool {
-        needles.contains { haystack.contains($0) }
+        TextMatching.containsAnyWord(haystack, needles)
     }
 
     static func extractAmount(from text: String) -> Double? {
@@ -106,8 +106,10 @@ enum ClassificationEngine {
     }
 
     static func extractVendor(from text: String) -> String? {
+        // Short names like "ola"/"jio" need word-boundary matching too, or
+        // "Coca-Cola" and "enjoyment" would misattribute a vendor.
         let knownVendors = ["amazon", "flipkart", "reliance", "mckinsey", "uber", "ola", "swiggy", "zomato", "apple", "google", "microsoft", "netflix", "airtel", "jio", "irctc", "indigo", "makemytrip"]
-        for vendor in knownVendors where text.contains(vendor) {
+        for vendor in knownVendors where TextMatching.containsWord(text, vendor) {
             return vendor.capitalized
         }
         return nil
