@@ -89,7 +89,8 @@ final class AppState: ObservableObject {
         self.pipeline = FileIngestPipeline(
             store: store,
             aiServiceProvider: { [weak self] in self?.makeAIService() ?? NullAIService() },
-            aiEnabledProvider: { [weak self] in self?.aiEnabled ?? false }
+            aiEnabledProvider: { [weak self] in self?.aiEnabled ?? false },
+            rootFolderProvider: { [weak self] in self?.downloadsFolder }
         )
         self.expiryPipeline = ExpiryDetectionPipeline(
             store: store,
@@ -109,6 +110,7 @@ final class AppState: ObservableObject {
         // real user action.
 
         if let folder = downloadsFolder {
+            store.pruneFileRecords(notDirectChildrenOf: folder)
             startMonitoring(folder: folder)
         }
     }

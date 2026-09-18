@@ -1,4 +1,5 @@
 import SwiftUI
+import Quartz
 
 enum SidebarSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
@@ -68,6 +69,23 @@ struct MainWindowView: View {
                 FilePreviewPane(file: selectedFile)
             } else {
                 ContentUnavailableView("No File Selected", systemImage: "doc", description: Text("Select a file to see details."))
+            }
+        }
+        // Space bar previews the selected file exactly like Finder — press
+        // once to open Quick Look, press again to dismiss it.
+        .onKeyPress(.space) {
+            guard let selectedFile else { return .ignored }
+            QuickLookCoordinator.shared.toggle(url: URL(fileURLWithPath: selectedFile.currentPath))
+            return .handled
+        }
+        // If Quick Look is already open and the user picks a different file,
+        // follow the selection live instead of leaving a stale preview up.
+        .onChange(of: selectedFile) { _, newFile in
+            guard let panel = QLPreviewPanel.shared(), panel.isVisible else { return }
+            if let newFile {
+                QuickLookCoordinator.shared.show(url: URL(fileURLWithPath: newFile.currentPath))
+            } else {
+                QuickLookCoordinator.shared.close()
             }
         }
     }

@@ -62,6 +62,8 @@ struct FilePreviewPane: View {
                 HStack {
                     Button("Open") { NSWorkspace.shared.open(URL(fileURLWithPath: file.currentPath)) }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file.currentPath)]) }
+                    Button("Quick Look") { QuickLookCoordinator.shared.toggle(url: URL(fileURLWithPath: file.currentPath)) }
+                        .help("Or just press Space")
                 }
                 HStack {
                     Button("Rename") {

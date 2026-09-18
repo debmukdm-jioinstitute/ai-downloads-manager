@@ -50,8 +50,15 @@ final class FolderMonitor {
     }
 
     private func handleRawEvents(_ paths: [String]) {
+        // kFSEventStreamCreateFlagFileEvents reports events for every file
+        // anywhere in the watched subtree, not just the folder's direct
+        // contents — without this check, running any build tool (or git
+        // command) *inside* the watched folder floods the library with its
+        // .build/.git internals. A Downloads folder is meant to be flat, so
+        // only direct children are ever real downloads.
         let candidates = paths.filter { p in
-            !Self.partialDownloadMarkers.contains(where: { p.hasSuffix($0) })
+            (p as NSString).deletingLastPathComponent == path
+                && !Self.partialDownloadMarkers.contains(where: { p.hasSuffix($0) })
         }
         guard !candidates.isEmpty else { return }
         // Debounce: give the OS a moment to finish writing before we report.

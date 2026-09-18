@@ -58,6 +58,26 @@ final class LibraryStore: ObservableObject {
         fileRecords.first { $0.currentPath == path }
     }
 
+    /// One-time (self-healing, cheap to call repeatedly) cleanup for a bug
+    /// where FSEvents' recursive subtree reporting let build/git internals
+    /// (.build, .git, Sources/, ...) get ingested as if they were downloads
+    /// whenever a project folder lived inside the watched Downloads folder.
+    /// Removes anything that isn't a direct child of `folder`, plus any
+    /// expiry records that pointed at it. Returns how many were removed.
+    @discardableResult
+    func pruneFileRecords(notDirectChildrenOf folder: URL) -> Int {
+        let root = folder.standardizedFileURL.path
+        let idsToRemove = Set(fileRecords.filter {
+            URL(fileURLWithPath: $0.currentPath).deletingLastPathComponent().standardizedFileURL.path != root
+        }.map(\.id))
+        guard !idsToRemove.isEmpty else { return 0 }
+        fileRecords.removeAll { idsToRemove.contains($0.id) }
+        expiryRecords.removeAll { idsToRemove.contains($0.documentID) }
+        saveFiles()
+        saveExpiryRecords()
+        return idsToRemove.count
+    }
+
     /// Removes a stale record (and anything keyed off its id) so a changed
     /// file at the same path gets one up-to-date record, not a second one.
     func removeFile(_ record: FileRecord) {
