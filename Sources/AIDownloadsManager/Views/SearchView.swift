@@ -49,7 +49,7 @@ struct SearchView: View {
         searchError = nil
         Task {
             var filters: AISearchFilters?
-            if appState.aiEnabled, KeychainService.hasAPIKey {
+            if appState.aiEnabled {
                 do {
                     filters = try await appState.makeAIService().interpretSearchQuery(query)
                 } catch {

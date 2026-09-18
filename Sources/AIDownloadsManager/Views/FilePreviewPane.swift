@@ -74,7 +74,7 @@ struct FilePreviewPane: View {
                         showingMove = true
                     }
                     Button("Ask AI") { showingAskAI = true }
-                        .disabled(!appState.aiEnabled || !KeychainService.hasAPIKey)
+                        .disabled(!appState.aiEnabled)
                 }
 
                 if let aiAnswer {

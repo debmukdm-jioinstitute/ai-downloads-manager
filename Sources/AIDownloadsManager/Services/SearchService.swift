@@ -1,7 +1,7 @@
 import Foundation
 
 /// Staged natural-language search over the already-indexed local library.
-/// Only the query text itself is ever sent to Claude — never the file library.
+/// Only the query text itself is ever sent to the local AI model — never the file library.
 @MainActor
 enum SearchService {
 

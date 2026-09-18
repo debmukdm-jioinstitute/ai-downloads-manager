@@ -1,15 +1,30 @@
 import Foundation
 
-/// Claude-backed implementation of AIService. Sends only the extracted text
-/// needed for a given call — never whole files, never the full library.
-struct ClaudeAIService: AIService {
-    private let apiKey: String
+/// Local, free, unlimited-use AI via Ollama (https://ollama.com) running on
+/// the user's own Mac. No API key, no rate limits, no per-call cost, no data
+/// ever leaves the machine — requests go to localhost only.
+struct OllamaAIService: AIService {
+    private let host: String
     private let model: String
-    private let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+    private let chatEndpoint: URL
 
-    init(apiKey: String, model: String = "claude-sonnet-5") {
-        self.apiKey = apiKey
+    init(host: String, model: String) {
+        self.host = host
         self.model = model
+        self.chatEndpoint = URL(string: host.trimmingCharacters(in: .init(charactersIn: "/")) + "/api/chat")!
+    }
+
+    /// GET /api/tags — used by Settings to confirm Ollama is running and to
+    /// list installed models before the user picks one. Returns nil if
+    /// Ollama isn't reachable at all, or an (possibly empty) array of
+    /// installed model names if it is.
+    static func listModels(host: String) async -> [String]? {
+        guard let url = URL(string: host.trimmingCharacters(in: .init(charactersIn: "/")) + "/api/tags") else { return nil }
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let models = json["models"] as? [[String: Any]] else { return nil }
+        return models.compactMap { $0["name"] as? String }
     }
 
     // MARK: - Public API
@@ -27,7 +42,6 @@ struct ClaudeAIService: AIService {
         if let parsed = Self.parseClassification(raw) {
             return parsed
         }
-        // One correction retry, per spec.
         let correction = """
         Your previous response was not valid JSON matching the schema. Reply with ONLY the JSON object, no prose, no markdown fences.
         Previous response:
@@ -89,17 +103,18 @@ struct ClaudeAIService: AIService {
     // MARK: - Networking
 
     private func send(system: String, user: String) async throws -> String {
-        var request = URLRequest(url: endpoint)
+        var request = URLRequest(url: chatEndpoint)
         request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
 
         let body: [String: Any] = [
             "model": model,
-            "max_tokens": 1024,
-            "system": system,
-            "messages": [["role": "user", "content": user]]
+            "stream": false,
+            "messages": [
+                ["role": "system", "content": system],
+                ["role": "user", "content": user]
+            ]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -107,7 +122,7 @@ struct ClaudeAIService: AIService {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            throw AIServiceError.network(error.localizedDescription)
+            throw AIServiceError.network("Couldn't reach Ollama at \(host). Is it running? (\(error.localizedDescription))")
         }
 
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -117,8 +132,8 @@ struct ClaudeAIService: AIService {
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let contentArray = json["content"] as? [[String: Any]],
-              let text = contentArray.first?["text"] as? String else {
+              let message = json["message"] as? [String: Any],
+              let text = message["content"] as? String else {
             throw AIServiceError.invalidResponse
         }
         return text

@@ -3,9 +3,14 @@ import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
-    @State private var apiKeyInput: String = ""
     @State private var showingConsent = false
-    @State private var saveConfirmation: String?
+    @State private var availableModels: [String] = []
+    @State private var connectionStatus: ConnectionStatus = .unknown
+    @State private var isTesting = false
+
+    enum ConnectionStatus {
+        case unknown, reachable, unreachable
+    }
 
     var body: some View {
         Form {
@@ -18,8 +23,8 @@ struct SettingsView: View {
                 }
             }
 
-            Section("AI Processing") {
-                Toggle("Enable AI classification (Claude)", isOn: Binding(
+            Section("AI Processing (Free, Local, Unlimited)") {
+                Toggle("Enable AI classification (Ollama)", isOn: Binding(
                     get: { appState.aiEnabled },
                     set: { newValue in
                         if newValue && !appState.hasSeenAIConsent {
@@ -30,32 +35,25 @@ struct SettingsView: View {
                     }
                 ))
 
-                SecureField("Claude API key", text: $apiKeyInput)
+                TextField("Ollama host", text: $appState.ollamaHost)
+                TextField("Model (e.g. llama3.2, mistral, qwen2.5)", text: $appState.ollamaModel)
+
                 HStack {
-                    Button("Save Key") {
-                        KeychainService.saveAPIKey(apiKeyInput)
-                        saveConfirmation = "API key saved to Keychain."
-                        apiKeyInput = ""
+                    Button("Test Connection") { Task { await testConnection() } }
+                        .disabled(isTesting)
+                    if isTesting {
+                        ProgressView().controlSize(.small)
                     }
-                    .disabled(apiKeyInput.isEmpty)
-
-                    Button("Remove Key", role: .destructive) {
-                        KeychainService.deleteAPIKey()
-                        appState.aiEnabled = false
-                        saveConfirmation = "API key removed."
-                    }
-                    .disabled(!KeychainService.hasAPIKey)
+                    statusView
                 }
 
-                Text(KeychainService.hasAPIKey ? "A key is stored securely in Keychain." : "No key stored.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let saveConfirmation {
-                    Text(saveConfirmation).font(.caption).foregroundStyle(.green)
+                if !availableModels.isEmpty {
+                    Picker("Installed models", selection: $appState.ollamaModel) {
+                        ForEach(availableModels, id: \.self) { Text($0).tag($0) }
+                    }
                 }
 
-                Text("Local processing (metadata, hashing, PDF text, OCR) always runs on-device. When AI is enabled, only extracted text from a file — never the file itself — is sent to Claude to classify it.")
+                Text("Local processing (metadata, hashing, PDF text, OCR) always runs on-device. When AI is enabled, extracted text is sent to Ollama — a free, open-source model running entirely on this Mac at \(appState.ollamaHost). Nothing ever leaves your machine, and there's no API key, quota, or per-use cost. Install Ollama from ollama.com and run \"ollama pull \(appState.ollamaModel.isEmpty ? "llama3.2" : appState.ollamaModel)\" if you haven't already.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -70,6 +68,7 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .sheet(isPresented: $showingConsent) {
             AIConsentSheet(
+                host: appState.ollamaHost,
                 onEnable: {
                     appState.hasSeenAIConsent = true
                     appState.aiEnabled = true
@@ -82,6 +81,27 @@ struct SettingsView: View {
                 }
             )
         }
+        .task { await testConnection() }
+    }
+
+    @ViewBuilder
+    private var statusView: some View {
+        switch connectionStatus {
+        case .unknown:
+            EmptyView()
+        case .reachable:
+            Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+        case .unreachable:
+            Label("Not reachable", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption)
+        }
+    }
+
+    private func testConnection() async {
+        isTesting = true
+        let models = await OllamaAIService.listModels(host: appState.ollamaHost)
+        availableModels = models ?? []
+        connectionStatus = models == nil ? .unreachable : .reachable
+        isTesting = false
     }
 
     private func chooseFolder() {

@@ -12,6 +12,12 @@ final class AppState: ObservableObject {
     @Published var hasSeenAIConsent: Bool {
         didSet { UserDefaults.standard.set(hasSeenAIConsent, forKey: "hasSeenAIConsent") }
     }
+    @Published var ollamaHost: String {
+        didSet { UserDefaults.standard.set(ollamaHost, forKey: "ollamaHost") }
+    }
+    @Published var ollamaModel: String {
+        didSet { UserDefaults.standard.set(ollamaModel, forKey: "ollamaModel") }
+    }
     @Published var isMonitoring = false
     @Published var lastError: String?
 
@@ -26,11 +32,13 @@ final class AppState: ObservableObject {
         self.downloadsFolder = FolderAccessStore.resolve()
         self.aiEnabled = UserDefaults.standard.bool(forKey: "aiEnabled")
         self.hasSeenAIConsent = UserDefaults.standard.bool(forKey: "hasSeenAIConsent")
+        self.ollamaHost = UserDefaults.standard.string(forKey: "ollamaHost") ?? "http://localhost:11434"
+        self.ollamaModel = UserDefaults.standard.string(forKey: "ollamaModel") ?? "llama3.2"
 
         self.pipeline = FileIngestPipeline(
             store: store,
             aiServiceProvider: { [weak self] in self?.makeAIService() ?? NullAIService() },
-            aiEnabledProvider: { [weak self] in (self?.aiEnabled ?? false) && KeychainService.hasAPIKey }
+            aiEnabledProvider: { [weak self] in self?.aiEnabled ?? false }
         )
 
         store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
@@ -41,8 +49,8 @@ final class AppState: ObservableObject {
     }
 
     func makeAIService() -> AIService {
-        guard aiEnabled, let key = KeychainService.loadAPIKey(), !key.isEmpty else { return NullAIService() }
-        return ClaudeAIService(apiKey: key)
+        guard aiEnabled, !ollamaModel.isEmpty else { return NullAIService() }
+        return OllamaAIService(host: ollamaHost, model: ollamaModel)
     }
 
     func chooseFolder(_ url: URL) {
