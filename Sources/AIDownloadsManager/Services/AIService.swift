@@ -29,6 +29,29 @@ struct AISearchFilters: Codable {
     var currency: String?
 }
 
+struct AIDocumentDateEvent: Codable {
+    var type: String // one of ExpiryEventType's raw values, lowercased (e.g. "expiry", "valid_from")
+    var date: String // yyyy-MM-dd
+    var confidence: Double
+    var explicit: Bool
+    var sourceText: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type, date, confidence, explicit
+        case sourceText = "source_text"
+    }
+}
+
+struct AIDocumentEventsResult: Codable {
+    var documentType: String?
+    var importantDates: [AIDocumentDateEvent]
+
+    enum CodingKeys: String, CodingKey {
+        case documentType = "document_type"
+        case importantDates = "important_dates"
+    }
+}
+
 enum AIServiceError: Error, LocalizedError {
     case notConfigured
     case invalidResponse
@@ -50,4 +73,5 @@ protocol AIService {
     func suggestFilename(filename: String, classification: AIClassificationResult) async throws -> String
     func interpretSearchQuery(_ query: String) async throws -> AISearchFilters
     func answer(question: String, context: String) async throws -> String
+    func extractDocumentEvents(filename: String, extractedText: String) async throws -> AIDocumentEventsResult
 }

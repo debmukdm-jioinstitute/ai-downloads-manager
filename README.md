@@ -92,6 +92,57 @@ you want.
 - **Rules / Organize Downloads**: groups unapproved files by
   category/subcategory, shows counts, and moves only on explicit
   Review/Apply — never automatically.
+- **Expiry Center — a generic "Document Events" engine**, not an
+  expiry-only feature (deliberately, per the product spec's own architectural
+  note — expiry, deadlines, renewals and event dates all flow through the same
+  pipeline):
+  - `DateDetectionEngine`: deterministic regex-based date detection (ISO,
+    numeric with `/`, `-`, `.` separators and 2- or 4-digit years, and month-name
+    formats in both orders), plus a "valid for N months from issue" duration
+    parser. **Not** built on `NSDataDetector` — see the note below, this was a
+    deliberate correction after finding a real bug.
+  - `ExpiryContextClassifier`: local, offline keyword-window heuristics that
+    decide what a date *means* — the Expiry vs. Deadline vs. Renewal vs. Event
+    distinction the whole feature depends on (a flight date is an `EVENT_DATE`,
+    never an `EXPIRY`). Also detects "X to Y" ranges (e.g. "Policy Period: ...
+    to ...") and correctly splits them into a start (`VALID_FROM`) and an
+    expiry, matching the spec's own worked example.
+  - AI refinement (optional): `AIService.extractDocumentEvents` asks the local
+    model for the same structured `{type, date, confidence, explicit,
+    source_text}` schema from the spec, validated against the fixed event-type
+    list and a real date before being trusted; falls back to the local result
+    if AI is off, fails, or returns nothing.
+  - Confidence-gated: anything below 75% confidence lands in **Needs Review**
+    with its source text shown, never silently promoted to a critical
+    reminder — matches the spec's "never claim expiry from ambiguous text"
+    safety rule.
+  - Runs automatically on every newly-ingested file, plus an explicit **Scan
+    for Important Dates** button that retroactively scans the *existing*
+    library (not just new downloads), with a funnel summary (files → docs with
+    text → docs with dates → new records).
+  - Dashboard (`ExpiryCenterView`): Expired / Expiring Soon / Upcoming buckets
+    with configurable day-thresholds (`ExpiryUrgencyWindows`), structured
+    Status/Category filters, and a local (non-AI) natural-language query parser
+    (`ExpiryQueryParser`) for phrasings like "what expires this month" or
+    "show insurance documents".
+  - Detail view: full "Why?" breakdown (source text, OCR vs. text, confidence),
+    Edit Date, Confirm/Ignore, and an explicit "Add to Calendar" action
+    (`CalendarService`, EventKit) with a configurable alarm offset.
+  - Local notifications (`ExpiryNotificationService`, `UserNotifications`) at
+    90/30/7-days-before and on-expiry, gated by a "high-confidence only"
+    setting — everything scheduled on-device, nothing sent anywhere.
+
+  **A real bug found and fixed during development:** the obvious first choice
+  for date parsing is `NSDataDetector`. Testing it against the spec's own
+  example phrases showed it silently resolves "valid until 31 March 2027" and
+  "passport valid until: 12 March 2027" to **today's date** (it appears to
+  treat "until"/"through" + a date as a relative-duration expression), and
+  collapses "Policy Period: 01/04/2026 to 31/03/2027" into a single match that
+  drops the end date — the expiry date, the one that matters most. Both were
+  verified with a standalone script before writing a line of the real engine.
+  `DateDetectionEngine` uses explicit, deterministic regexes instead, verified
+  against all of the spec's listed formats plus both of these exact regression
+  cases (see `Tests/`).
 
 ## What's intentionally thin for an MVP
 
@@ -103,3 +154,31 @@ you want.
 - AI quality depends on which local model you pull; smaller models (e.g. 3B)
   classify faster but less reliably than larger ones — pick based on your
   Mac's memory.
+- Expiry Center scope: this ships the V1 core (detection → classification →
+  dashboard) plus OCR support and the V1.2 items (notifications, calendar).
+  Deliberately deferred, per the spec's own recommended phased sequence:
+  - **AI-assisted natural-language expiry queries** — the search bar uses a
+    deterministic local parser only; routing free-text queries through the
+    local LLM for looser phrasing is a documented next step, not done here.
+  - **Deep recurring-subscription semantics** — recurrence is detected via a
+    simple keyword scan (monthly/yearly/quarterly/weekly) and stored as a
+    label; it doesn't track billing cycles or compute `nextOccurrence`.
+  - **Correction-learning loop** (spec §21) — corrections currently just edit
+    the record; they aren't fed back into future classification.
+  - **Unified "Attention Center"** merging expiry with duplicates/other
+    signals (spec §25) — Overview shows a lightweight expiry-only "Today's
+    Attention" list instead of a full cross-feature center.
+- `Tests/AIDownloadsManagerTests` exists and is real (XCTest against
+  `DateDetectionEngine`/`ExpiryContextClassifier`, including both regressions
+  above), but **`swift test` needs Xcode.app** in this environment for the
+  same reason SwiftData does — `XCTest.framework` isn't part of the
+  standalone Command Line Tools. It wasn't left unverified for that reason:
+  the same production source files were compiled and run as a standalone
+  driver (`swiftc` + explicit binary, not `swift test`) with all 27 assertions
+  passing before this was committed. Open the package in real Xcode and
+  `swift test` will run normally.
+- `ExpiryNotificationService` (UserNotifications) and `CalendarService`
+  (EventKit) are real, but authorization prompts and delivery are only
+  reliable from a properly signed `.app` bundle with the relevant
+  usage-description keys in Info.plist — another thing that needs the Xcode
+  app-target migration mentioned above to fully verify end-to-end.

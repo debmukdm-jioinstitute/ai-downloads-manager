@@ -19,4 +19,7 @@ struct NullAIService: AIService {
     func answer(question: String, context: String) async throws -> String {
         throw AIServiceError.notConfigured
     }
+    func extractDocumentEvents(filename: String, extractedText: String) async throws -> AIDocumentEventsResult {
+        throw AIServiceError.notConfigured
+    }
 }

@@ -100,6 +100,20 @@ struct OllamaAIService: AIService {
         return try await send(system: system, user: user).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    func extractDocumentEvents(filename: String, extractedText: String) async throws -> AIDocumentEventsResult {
+        let content = String(extractedText.prefix(6000))
+        let raw = try await send(system: Self.documentEventsSystemPrompt, user: "Filename: \(filename)\n\nExtracted content:\n\(content)")
+        if let parsed = Self.parseDocumentEvents(raw) {
+            return parsed
+        }
+        let correction = "Your previous response was not valid JSON matching the schema. Reply with ONLY the JSON object.\nPrevious response:\n\(raw)"
+        let retry = try await send(system: Self.documentEventsSystemPrompt, user: "Filename: \(filename)\n\nExtracted content:\n\(content)\n\n\(correction)")
+        guard let retryParsed = Self.parseDocumentEvents(retry) else {
+            throw AIServiceError.invalidResponse
+        }
+        return retryParsed
+    }
+
     // MARK: - Networking
 
     private func send(system: String, user: String) async throws -> String {
@@ -159,6 +173,18 @@ struct OllamaAIService: AIService {
         return result
     }
 
+    private static func parseDocumentEvents(_ raw: String) -> AIDocumentEventsResult? {
+        guard let json = extractJSON(raw), let data = json.data(using: .utf8) else { return nil }
+        guard let result = try? JSONDecoder().decode(AIDocumentEventsResult.self, from: data) else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let validTypes = Set(ExpiryEventType.allCases.map { $0.rawValue.lowercased() })
+        let valid = result.importantDates.allSatisfy { event in
+            validTypes.contains(event.type.lowercased()) && formatter.date(from: event.date) != nil
+        }
+        return valid ? result : nil
+    }
+
     private static func todayString() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -187,5 +213,31 @@ struct OllamaAIService: AIService {
     "subcategory" must be one of the valid subcategories for that category.
     "confidence" is 0.0-1.0, your genuine confidence in this classification.
     "reason" is a one-sentence, human-readable explanation of why you chose this category.
+    """
+
+    private static let documentEventsSystemPrompt = """
+    You find date-related events in a document and classify what each date MEANS. Reply with ONLY a strict JSON object matching this exact schema, no prose, no markdown fences:
+    {
+      "document_type": "",
+      "important_dates": [
+        {
+          "type": "",
+          "date": "",
+          "confidence": 0.0,
+          "explicit": true,
+          "source_text": ""
+        }
+      ]
+    }
+    "type" MUST be exactly one of (lowercase): \(ExpiryEventType.allCases.map { $0.rawValue.lowercased() }.joined(separator: ", ")).
+    Rules:
+    - A flight/hotel/appointment date is "event_date", NOT "expiry". Only use "expiry" when the document explicitly states something expires, becomes invalid, or is no longer valid on that date.
+    - A payment/submission deadline is "due_date" or "deadline", never "expiry".
+    - "date" MUST be in YYYY-MM-DD format.
+    - "explicit" is true only if the document states this exact date; false if you calculated it from a stated duration (e.g. "valid for 12 months from issue").
+    - "source_text" is the exact (or near-exact) snippet of the document that this date came from — this is shown to the user to justify the detection, so do not paraphrase it away.
+    - "confidence" is your genuine 0.0-1.0 confidence that this date and its meaning are correct. Use a LOW confidence (below 0.6) if the meaning is ambiguous — do not guess "expiry" just because a date is present.
+    - If the document has no meaningful dates, return an empty "important_dates" array.
+    - Never invent a date that is not present in the text.
     """
 }

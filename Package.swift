@@ -8,6 +8,11 @@ let package = Package(
         .executableTarget(
             name: "AIDownloadsManager",
             path: "Sources/AIDownloadsManager"
+        ),
+        .testTarget(
+            name: "AIDownloadsManagerTests",
+            dependencies: ["AIDownloadsManager"],
+            path: "Tests/AIDownloadsManagerTests"
         )
     ]
 )

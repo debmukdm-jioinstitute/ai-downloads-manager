@@ -11,6 +11,7 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var operations: [OperationRecord] = []
     @Published private(set) var activity: [ActivityEvent] = []
     @Published private(set) var rules: [OrganizationRule] = []
+    @Published private(set) var expiryRecords: [ExpiryRecord] = []
 
     private let directory: URL
     private let encoder: JSONEncoder = {
@@ -34,6 +35,7 @@ final class LibraryStore: ObservableObject {
         operations = load("operations.json")
         activity = load("activity.json")
         rules = load("rules.json")
+        expiryRecords = load("expiry.json")
     }
 
     // MARK: - Files
@@ -76,6 +78,30 @@ final class LibraryStore: ObservableObject {
     func insertRule(_ rule: OrganizationRule) {
         rules.append(rule)
         persist(rules, to: "rules.json")
+    }
+
+    // MARK: - Expiry Records
+
+    func hasExpiryRecord(documentID: UUID, eventType: ExpiryEventType, date: Date) -> Bool {
+        let calendar = Calendar.current
+        return expiryRecords.contains {
+            $0.documentID == documentID && $0.eventType == eventType && calendar.isDate($0.date, inSameDayAs: date)
+        }
+    }
+
+    func insertExpiryRecord(_ record: ExpiryRecord) {
+        expiryRecords.append(record)
+        saveExpiryRecords()
+    }
+
+    func removeExpiryRecords(forDocumentID documentID: UUID) {
+        expiryRecords.removeAll { $0.documentID == documentID }
+        saveExpiryRecords()
+    }
+
+    func saveExpiryRecords() {
+        persist(expiryRecords, to: "expiry.json")
+        objectWillChange.send()
     }
 
     // MARK: - Disk I/O

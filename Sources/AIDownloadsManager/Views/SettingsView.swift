@@ -49,6 +49,24 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Expiry Notifications") {
+                Toggle("90 days before", isOn: offsetBinding(90))
+                Toggle("30 days before", isOn: offsetBinding(30))
+                Toggle("7 days before", isOn: offsetBinding(7))
+                Toggle("On expiry", isOn: $appState.notifyOnExpiry)
+                Toggle("Notify only high-confidence detections", isOn: $appState.notifyOnlyHighConfidence)
+
+                if !appState.notificationsAuthorized {
+                    Button("Enable Notifications") {
+                        Task { await appState.requestNotificationAuthorization() }
+                    }
+                }
+
+                Text("Notifications are scheduled locally on this Mac for expiry, deadline, and renewal dates the app finds in your documents. Nothing is sent anywhere.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("About") {
                 Text("AI Downloads Manager understands, organizes, and helps you search your Downloads folder. Nothing is ever deleted automatically, and files are only moved with your review or explicit rule.")
                     .font(.caption)
@@ -73,6 +91,15 @@ struct SettingsView: View {
         .task {
             availableModels = await OllamaAIService.listModels(host: appState.ollamaHost) ?? []
         }
+    }
+
+    private func offsetBinding(_ days: Int) -> Binding<Bool> {
+        Binding(
+            get: { appState.notifyOffsetDays.contains(days) },
+            set: { isOn in
+                if isOn { appState.notifyOffsetDays.insert(days) } else { appState.notifyOffsetDays.remove(days) }
+            }
+        )
     }
 
     private func chooseFolder() {

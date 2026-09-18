@@ -37,6 +37,26 @@ struct OverviewView: View {
                     }
                 }
 
+                let attentionItems = appState.expiryRecords().filter {
+                    $0.userStatus == .active && !$0.needsReview &&
+                    [.expired, .critical].contains($0.urgency(windows: appState.expiryUrgencyWindows) ?? .future)
+                }
+                if !attentionItems.isEmpty {
+                    Divider().padding(.vertical, 4)
+                    Text("Today's Attention").font(.headline)
+                    ForEach(attentionItems.prefix(5)) { record in
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                            let days = record.daysRemaining()
+                            Text(days < 0
+                                 ? "\(record.title) — expired \(-days) day\(-days == 1 ? "" : "s") ago"
+                                 : "\(record.title) — \(record.eventType.displayName.lowercased()) in \(days) day\(days == 1 ? "" : "s")")
+                            Spacer()
+                        }
+                        .font(.callout)
+                    }
+                }
+
                 Divider().padding(.vertical, 4)
 
                 Text("Needs Review")

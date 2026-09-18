@@ -16,22 +16,24 @@ final class FileIngestPipeline {
     }
 
     /// Skips files that are unreadable, already indexed at the same path+hash, or unsupported system files.
-    func ingest(path: String) async {
+    /// Returns the created (or already up-to-date) record, or nil if the file was skipped.
+    @discardableResult
+    func ingest(path: String) async -> FileRecord? {
         let fm = FileManager.default
-        guard fm.isReadableFile(atPath: path) else { return }
+        guard fm.isReadableFile(atPath: path) else { return nil }
         let url = URL(fileURLWithPath: path)
         let name = url.lastPathComponent
-        guard !name.hasPrefix("."), !name.isEmpty else { return }
+        guard !name.hasPrefix("."), !name.isEmpty else { return nil }
 
         guard let attrs = try? fm.attributesOfItem(atPath: path),
               let size = attrs[.size] as? Int64,
               let creation = attrs[.creationDate] as? Date,
-              let modification = attrs[.modificationDate] as? Date else { return }
+              let modification = attrs[.modificationDate] as? Date else { return nil }
 
         // Avoid reprocessing a path we already have an up-to-date record for.
         if let existing = store.fileRecord(withPath: path),
            existing.modificationDate == modification, existing.fileSize == size {
-            return
+            return nil
         }
 
         let ext = url.pathExtension.lowercased()
@@ -91,6 +93,7 @@ final class FileIngestPipeline {
 
         store.insertActivity(ActivityEvent(kind: .classified, message: "Classified as \(record.category)\(record.subcategory.map { "/\($0)" } ?? "")", filename: name))
         store.saveFiles()
+        return record
     }
 
     private func applyLocal(_ local: LocalClassification, to record: FileRecord) {

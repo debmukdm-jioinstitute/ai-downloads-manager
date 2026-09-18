@@ -21,10 +21,34 @@ final class AppState: ObservableObject {
     @Published var isMonitoring = false
     @Published var lastError: String?
 
+    @Published var expiryUrgencyWindows: ExpiryUrgencyWindows {
+        didSet { expiryUrgencyWindows.saveToDefaults() }
+    }
+    @Published var notifyOffsetDays: Set<Int> {
+        didSet {
+            UserDefaults.standard.set(Array(notifyOffsetDays), forKey: "notifyOffsetDays")
+            Task { await rescheduleExpiryNotifications() }
+        }
+    }
+    @Published var notifyOnExpiry: Bool {
+        didSet {
+            UserDefaults.standard.set(notifyOnExpiry, forKey: "notifyOnExpiry")
+            Task { await rescheduleExpiryNotifications() }
+        }
+    }
+    @Published var notifyOnlyHighConfidence: Bool {
+        didSet {
+            UserDefaults.standard.set(notifyOnlyHighConfidence, forKey: "notifyOnlyHighConfidence")
+            Task { await rescheduleExpiryNotifications() }
+        }
+    }
+    @Published var notificationsAuthorized = false
+
     let store: LibraryStore
     let ollamaSetup = OllamaSetupCoordinator()
     private var monitor: FolderMonitor?
     private var pipeline: FileIngestPipeline?
+    private var expiryPipeline: ExpiryDetectionPipeline?
     private var cancellables: Set<AnyCancellable> = []
 
     init(store: LibraryStore) {
@@ -35,8 +59,21 @@ final class AppState: ObservableObject {
         self.hasSeenAIConsent = UserDefaults.standard.bool(forKey: "hasSeenAIConsent")
         self.ollamaHost = UserDefaults.standard.string(forKey: "ollamaHost") ?? "http://localhost:11434"
         self.ollamaModel = UserDefaults.standard.string(forKey: "ollamaModel") ?? "llama3.2:1b"
+        self.expiryUrgencyWindows = ExpiryUrgencyWindows.loadFromDefaults()
+        if let savedOffsets = UserDefaults.standard.array(forKey: "notifyOffsetDays") as? [Int] {
+            self.notifyOffsetDays = Set(savedOffsets)
+        } else {
+            self.notifyOffsetDays = [30, 7]
+        }
+        self.notifyOnExpiry = UserDefaults.standard.object(forKey: "notifyOnExpiry") as? Bool ?? true
+        self.notifyOnlyHighConfidence = UserDefaults.standard.object(forKey: "notifyOnlyHighConfidence") as? Bool ?? true
 
         self.pipeline = FileIngestPipeline(
+            store: store,
+            aiServiceProvider: { [weak self] in self?.makeAIService() ?? NullAIService() },
+            aiEnabledProvider: { [weak self] in self?.aiEnabled ?? false }
+        )
+        self.expiryPipeline = ExpiryDetectionPipeline(
             store: store,
             aiServiceProvider: { [weak self] in self?.makeAIService() ?? NullAIService() },
             aiEnabledProvider: { [weak self] in self?.aiEnabled ?? false }
@@ -95,9 +132,85 @@ final class AppState: ObservableObject {
 
     private func handleChangedPaths(_ paths: [String]) async {
         guard let pipeline else { return }
+        var createdAnyExpiryRecord = false
         for path in paths {
-            await pipeline.ingest(path: path)
+            guard let record = await pipeline.ingest(path: path) else { continue }
+            if let expiryPipeline {
+                let created = await expiryPipeline.detectAndStore(for: record)
+                if created > 0 { createdAnyExpiryRecord = true }
+            }
         }
+        if createdAnyExpiryRecord {
+            await rescheduleExpiryNotifications()
+        }
+    }
+
+    // MARK: - Expiry / Document Events
+
+    func expiryRecords() -> [ExpiryRecord] {
+        store.expiryRecords.sorted { $0.date < $1.date }
+    }
+
+    struct ExpiryScanSummary {
+        var filesScanned: Int
+        var supportedDocuments: Int
+        var documentsWithDates: Int
+        var recordsCreated: Int
+    }
+
+    /// "Scan for important dates" — runs expiry detection over the *existing*
+    /// library, not just newly-downloaded files, so the feature is useful
+    /// retroactively (spec section 18).
+    func scanForImportantDates() async -> ExpiryScanSummary {
+        guard let expiryPipeline else {
+            return ExpiryScanSummary(filesScanned: 0, supportedDocuments: 0, documentsWithDates: 0, recordsCreated: 0)
+        }
+        let files = allFiles()
+        let withText = files.filter { !($0.extractedText ?? "").isEmpty || !($0.ocrText ?? "").isEmpty }
+        var withDates = 0
+        var created = 0
+        for file in withText {
+            let count = await expiryPipeline.detectAndStore(for: file)
+            if count > 0 { withDates += 1 }
+            created += count
+        }
+        if created > 0 {
+            await rescheduleExpiryNotifications()
+        }
+        return ExpiryScanSummary(
+            filesScanned: files.count,
+            supportedDocuments: withText.count,
+            documentsWithDates: withDates,
+            recordsCreated: created
+        )
+    }
+
+    func setExpiryUserStatus(_ record: ExpiryRecord, status: ExpiryUserStatus) {
+        record.userStatus = status
+        record.updatedAt = Date()
+        store.saveExpiryRecords()
+        Task { await rescheduleExpiryNotifications() }
+    }
+
+    func updateExpiryDate(_ record: ExpiryRecord, date: Date) {
+        record.date = date
+        record.updatedAt = Date()
+        store.saveExpiryRecords()
+        Task { await rescheduleExpiryNotifications() }
+    }
+
+    func requestNotificationAuthorization() async {
+        notificationsAuthorized = await ExpiryNotificationService.requestAuthorization()
+        await rescheduleExpiryNotifications()
+    }
+
+    func rescheduleExpiryNotifications() async {
+        await ExpiryNotificationService.reschedule(
+            records: store.expiryRecords,
+            offsetDays: notifyOffsetDays,
+            notifyOnExpiry: notifyOnExpiry,
+            onlyHighConfidence: notifyOnlyHighConfidence
+        )
     }
 
     func organizer() -> FileOrganizerService? {

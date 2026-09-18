@@ -4,6 +4,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case allFiles = "All Files"
     case categories = "Categories"
+    case expiryCenter = "Expiry Center"
     case search = "Search"
     case rules = "Rules"
     case activity = "Activity"
@@ -16,6 +17,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         case .overview: return "square.grid.2x2"
         case .allFiles: return "doc.on.doc"
         case .categories: return "folder"
+        case .expiryCenter: return "clock.badge.exclamationmark"
         case .search: return "magnifyingglass"
         case .rules: return "wand.and.stars"
         case .activity: return "clock"
@@ -44,6 +46,8 @@ struct MainWindowView: View {
                 AllFilesView(selectedFile: $selectedFile)
             case .categories:
                 CategoriesView(selectedFile: $selectedFile)
+            case .expiryCenter:
+                ExpiryCenterView()
             case .search:
                 SearchView(selectedFile: $selectedFile)
             case .rules:
