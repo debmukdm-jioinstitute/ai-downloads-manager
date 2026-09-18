@@ -132,6 +132,14 @@ struct FilePreviewPane: View {
             Picker("Category", selection: $moveCategory) {
                 ForEach(CategoryTaxonomy.allCategories, id: \.self) { Text($0).tag($0) }
             }
+            .onChange(of: moveCategory) { _, newCategory in
+                // A subcategory from the previous category (e.g. "Invoices"
+                // under "Finance") isn't valid under the newly-picked one —
+                // reset it rather than silently submitting an invalid pair.
+                if let sub = moveSubcategory, !CategoryTaxonomy.subcategories(for: newCategory).contains(sub) {
+                    moveSubcategory = nil
+                }
+            }
             Picker("Subcategory", selection: Binding(get: { moveSubcategory ?? "" }, set: { moveSubcategory = $0.isEmpty ? nil : $0 })) {
                 Text("None").tag("")
                 ForEach(CategoryTaxonomy.subcategories(for: moveCategory), id: \.self) { Text($0).tag($0) }

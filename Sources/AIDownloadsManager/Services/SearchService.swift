@@ -41,7 +41,7 @@ enum SearchService {
                 if let cat = filters.category, cat.caseInsensitiveCompare(file.category) != .orderedSame { continue }
                 if let vendor = filters.vendor, file.detectedVendor?.localizedCaseInsensitiveContains(vendor) != true { continue }
                 if let docType = filters.documentType, file.detectedDocumentType?.localizedCaseInsensitiveContains(docType) != true { continue }
-                if let currency = filters.currency, file.detectedCurrency != currency { continue }
+                if let currency = filters.currency, file.detectedCurrency?.caseInsensitiveCompare(currency) != .orderedSame { continue }
                 if let minAmt = filters.amountMin, (file.detectedAmount ?? -1) < minAmt { continue }
                 if let maxAmt = filters.amountMax, (file.detectedAmount ?? .greatestFiniteMagnitude) > maxAmt { continue }
                 if let dateFrom = parseDate(filters.dateFrom), let fileDate = file.detectedDate ?? file.dateDownloaded as Date?, fileDate < dateFrom { continue }

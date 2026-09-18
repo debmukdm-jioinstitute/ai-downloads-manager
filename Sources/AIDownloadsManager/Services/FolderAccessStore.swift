@@ -21,8 +21,18 @@ enum FolderAccessStore {
         if let bookmark = UserDefaults.standard.data(forKey: bookmarkKey) {
             var isStale = false
             if let url = try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
-                _ = url.startAccessingSecurityScopedResource()
-                return url
+                if isStale {
+                    // Self-heal: re-save a fresh bookmark now that we have a
+                    // resolved URL, rather than silently using a rotting one
+                    // on every future launch.
+                    save(url: url)
+                }
+                if url.startAccessingSecurityScopedResource() {
+                    return url
+                }
+                // Access explicitly failed (revoked, folder moved/deleted) —
+                // don't return this URL as if it were usable; fall through to
+                // the plain-path fallback below instead.
             }
         }
         if let path = UserDefaults.standard.string(forKey: pathKey) {

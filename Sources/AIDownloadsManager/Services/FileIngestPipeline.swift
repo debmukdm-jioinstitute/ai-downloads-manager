@@ -31,9 +31,14 @@ final class FileIngestPipeline {
               let modification = attrs[.modificationDate] as? Date else { return nil }
 
         // Avoid reprocessing a path we already have an up-to-date record for.
-        if let existing = store.fileRecord(withPath: path),
-           existing.modificationDate == modification, existing.fileSize == size {
-            return nil
+        // If a record exists but the file has actually changed (re-exported,
+        // overwritten in place), replace it rather than inserting a second,
+        // independent record for the same path.
+        if let existing = store.fileRecord(withPath: path) {
+            if existing.modificationDate == modification, existing.fileSize == size {
+                return nil
+            }
+            store.removeFile(existing)
         }
 
         let ext = url.pathExtension.lowercased()

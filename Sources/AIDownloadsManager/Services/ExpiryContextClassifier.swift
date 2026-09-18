@@ -49,7 +49,11 @@ enum ExpiryContextClassifier {
 
     static func classify(filename: String, text: String, ocrText: String?, fromOCR: Bool = false) -> [ExpiryRecordDraft] {
         var drafts: [ExpiryRecordDraft] = []
-        let combined = text
+        // A scanned image (passport photo, insurance card) has no extracted
+        // text at all, only OCR output — date-scanning must fall back to it,
+        // the same way the caller's own pre-filter and `fromOCR` flag already
+        // assume, or OCR-only documents silently never produce expiry records.
+        let combined = text.isEmpty ? (ocrText ?? "") : text
         let fullLower = ((text) + " " + (ocrText ?? "")).lowercased()
         let category = category(forContext: fullLower, filename: filename)
         let recurrence = detectRecurrence(in: fullLower)

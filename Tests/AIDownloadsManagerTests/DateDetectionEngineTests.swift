@@ -63,4 +63,13 @@ final class DateDetectionEngineTests: XCTestCase {
         let candidates = DateDetectionEngine.detectDates(in: "This is just a normal sentence with no dates in it.")
         XCTAssertTrue(candidates.isEmpty)
     }
+
+    /// Regression test: `Calendar.date(from:)` silently rolls invalid
+    /// day-in-month combinations forward (verified: Feb 30 2027 -> Mar 2
+    /// 2027) instead of rejecting them. An OCR misread or typo must never
+    /// become a confidently-wrong expiry date.
+    func testInvalidCalendarDatesAreRejectedNotNormalized() {
+        XCTAssertTrue(DateDetectionEngine.detectDates(in: "Expires 30/02/2027").isEmpty, "Feb 30 is not a real date")
+        XCTAssertTrue(DateDetectionEngine.detectDates(in: "Expires 31/04/2027").isEmpty, "April 31 is not a real date")
+    }
 }

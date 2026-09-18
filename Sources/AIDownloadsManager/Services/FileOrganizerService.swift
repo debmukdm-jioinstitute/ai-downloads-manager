@@ -4,12 +4,15 @@ enum FileOrganizerError: Error, LocalizedError {
     case sourceMissing
     case destinationCreateFailed
     case moveFailed(String)
+    case invalidCategory(String, String?)
 
     var errorDescription: String? {
         switch self {
         case .sourceMissing: return "The source file no longer exists."
         case .destinationCreateFailed: return "Could not create the destination folder."
         case .moveFailed(let reason): return "Move failed: \(reason)"
+        case .invalidCategory(let category, let subcategory):
+            return "\"\(subcategory ?? "—")\" isn't a valid subcategory of \"\(category)\"."
         }
     }
 }
@@ -30,6 +33,9 @@ final class FileOrganizerService {
     /// Never overwrites: if a name collision exists, a " 2", " 3"... suffix is used.
     @discardableResult
     func moveToCategory(_ record: FileRecord, category: String, subcategory: String?) throws -> OperationRecord {
+        guard CategoryTaxonomy.isValid(category: category, subcategory: subcategory) else {
+            throw FileOrganizerError.invalidCategory(category, subcategory)
+        }
         let fm = FileManager.default
         let sourceURL = URL(fileURLWithPath: record.currentPath)
         guard fm.fileExists(atPath: sourceURL.path) else { throw FileOrganizerError.sourceMissing }

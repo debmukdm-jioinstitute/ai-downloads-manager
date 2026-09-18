@@ -6,12 +6,21 @@ import Foundation
 struct OllamaAIService: AIService {
     private let host: String
     private let model: String
-    private let chatEndpoint: URL
 
     init(host: String, model: String) {
         self.host = host
         self.model = model
-        self.chatEndpoint = URL(string: host.trimmingCharacters(in: .init(charactersIn: "/")) + "/api/chat")!
+    }
+
+    /// A malformed host string (the field is free-text in Settings) must
+    /// surface as a normal thrown error, never crash the app.
+    private var chatEndpoint: URL {
+        get throws {
+            guard let url = URL(string: host.trimmingCharacters(in: .init(charactersIn: "/")) + "/api/chat") else {
+                throw AIServiceError.network("\"\(host)\" isn't a valid Ollama host URL.")
+            }
+            return url
+        }
     }
 
     /// GET /api/tags — used by Settings to confirm Ollama is running and to
@@ -117,7 +126,7 @@ struct OllamaAIService: AIService {
     // MARK: - Networking
 
     private func send(system: String, user: String) async throws -> String {
-        var request = URLRequest(url: chatEndpoint)
+        var request = URLRequest(url: try chatEndpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 120

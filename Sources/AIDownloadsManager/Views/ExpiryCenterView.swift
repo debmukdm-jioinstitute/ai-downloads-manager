@@ -11,6 +11,11 @@ struct ExpiryCenterView: View {
 
     private var windows: ExpiryUrgencyWindows { appState.expiryUrgencyWindows }
 
+    private var availableCategories: [String] {
+        let present = Set(appState.expiryRecords().map(\.category))
+        return Array(Set(ExpiryCategoryTaxonomy.suggested).union(present)).sorted()
+    }
+
     private var filtered: [ExpiryRecord] {
         var records = appState.expiryRecords().filter { $0.userStatus != .ignored }
         let queryFilter = searchText.isEmpty ? nil : ExpiryQueryParser.parse(searchText)
@@ -38,11 +43,15 @@ struct ExpiryCenterView: View {
         return records
     }
 
-    private var needsReview: [ExpiryRecord] {
-        appState.expiryRecords().filter { $0.needsReview && $0.userStatus == .active }
-    }
-
     var body: some View {
+        // Computed once per render and threaded through explicitly — `filtered`
+        // sorts and filters the whole library, and several sections need it;
+        // reading it as a computed property from each one independently
+        // re-ran that work (several full sorts per render, worse the larger
+        // the library gets).
+        let visible = filtered
+        let review = visible.filter { $0.needsReview }
+
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
@@ -53,13 +62,13 @@ struct ExpiryCenterView: View {
                     scanSummaryView(scanSummary)
                 }
 
-                if !needsReview.isEmpty {
-                    reviewSection
+                if !review.isEmpty {
+                    reviewSection(review)
                 }
 
-                bucketSection(title: "EXPIRED", urgency: .expired, systemImage: "exclamationmark.octagon.fill", tint: .red)
-                bucketSection(title: "EXPIRING SOON", urgencies: [.critical, .soon], systemImage: "clock.badge.exclamationmark.fill", tint: .orange)
-                bucketSection(title: "UPCOMING", urgencies: [.upcoming, .future], systemImage: "calendar", tint: .secondary)
+                bucketSection(visible, title: "EXPIRED", urgency: .expired, systemImage: "exclamationmark.octagon.fill", tint: .red)
+                bucketSection(visible, title: "EXPIRING SOON", urgencies: [.critical, .soon], systemImage: "clock.badge.exclamationmark.fill", tint: .orange)
+                bucketSection(visible, title: "UPCOMING", urgencies: [.upcoming, .future], systemImage: "calendar", tint: .secondary)
             }
             .padding(24)
         }
@@ -123,17 +132,21 @@ struct ExpiryCenterView: View {
                 }
                 Picker("Category", selection: $categoryFilter) {
                     Text("All Categories").tag(String?.none)
-                    ForEach(ExpiryCategoryTaxonomy.suggested, id: \.self) { Text($0).tag(Optional($0)) }
+                    // Categories are free-form (AI can assign anything), so the
+                    // filter must include whatever's actually present in the
+                    // data, not just the suggested list — otherwise a record
+                    // with an unlisted category can never be isolated here.
+                    ForEach(availableCategories, id: \.self) { Text($0).tag(Optional($0)) }
                 }
             }
             .pickerStyle(.menu)
         }
     }
 
-    private var reviewSection: some View {
+    private func reviewSection(_ review: [ExpiryRecord]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Needs Review (\(needsReview.count))").font(.headline)
-            ForEach(needsReview) { record in
+            Text("Needs Review (\(review.count))").font(.headline)
+            ForEach(review) { record in
                 reviewRow(record)
             }
         }
@@ -158,13 +171,13 @@ struct ExpiryCenterView: View {
     }
 
     @ViewBuilder
-    private func bucketSection(title: String, urgency: ExpiryUrgency, systemImage: String, tint: Color) -> some View {
-        bucketSection(title: title, urgencies: [urgency], systemImage: systemImage, tint: tint)
+    private func bucketSection(_ visible: [ExpiryRecord], title: String, urgency: ExpiryUrgency, systemImage: String, tint: Color) -> some View {
+        bucketSection(visible, title: title, urgencies: [urgency], systemImage: systemImage, tint: tint)
     }
 
     @ViewBuilder
-    private func bucketSection(title: String, urgencies: [ExpiryUrgency], systemImage: String, tint: Color) -> some View {
-        let items = filtered.filter { record in
+    private func bucketSection(_ visible: [ExpiryRecord], title: String, urgencies: [ExpiryUrgency], systemImage: String, tint: Color) -> some View {
+        let items = visible.filter { record in
             guard let u = record.urgency(windows: windows) else { return false }
             return urgencies.contains(u) && !record.needsReview
         }

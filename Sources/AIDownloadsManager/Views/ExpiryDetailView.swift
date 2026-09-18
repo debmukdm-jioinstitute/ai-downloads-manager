@@ -109,7 +109,10 @@ struct ExpiryDetailView: View {
     private var suggestionView: some View {
         if record.eventType == .expiry || record.eventType == .deadline || record.eventType == .renewal {
             let days = record.daysRemaining()
-            if days >= 0 && days <= 60 {
+            // Match the same urgency window the dashboard buckets use
+            // (critical + soon), not an unrelated hardcoded cutoff — otherwise
+            // this banner can contradict which bucket the record is actually in.
+            if days >= 0 && days <= appState.expiryUrgencyWindows.soonDays {
                 Text("\(record.title) \(record.eventType.displayName.lowercased()) in \(days) day\(days == 1 ? "" : "s"). Consider reviewing your options before then.")
                     .font(.callout)
                     .padding(10)

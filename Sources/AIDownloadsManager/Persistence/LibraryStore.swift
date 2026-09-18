@@ -49,6 +49,14 @@ final class LibraryStore: ObservableObject {
         fileRecords.first { $0.currentPath == path }
     }
 
+    /// Removes a stale record (and anything keyed off its id) so a changed
+    /// file at the same path gets one up-to-date record, not a second one.
+    func removeFile(_ record: FileRecord) {
+        fileRecords.removeAll { $0.id == record.id }
+        saveFiles()
+        removeExpiryRecords(forDocumentID: record.id)
+    }
+
     func fileRecords(withHash hash: String) -> [FileRecord] {
         fileRecords.filter { $0.contentHash == hash }
     }

@@ -114,13 +114,24 @@ enum DateDetectionEngine {
         return (fullRange, months)
     }
 
+    private static let gregorian = Calendar(identifier: .gregorian)
+
+    /// `Calendar.date(from:)` silently rolls invalid day-in-month combos
+    /// forward instead of rejecting them (verified: Feb 30 2027 -> Mar 2
+    /// 2027, Apr 31 2027 -> May 1 2027) — an OCR misread or typo like
+    /// "30/02/2027" must not become a confidently-wrong expiry date, so the
+    /// result is round-tripped back through the calendar and rejected unless
+    /// it reproduces the exact day/month/year requested.
     private static func makeDate(day: Int, month: Int, year: Int) -> Date? {
         guard month >= 1, month <= 12, day >= 1, day <= 31 else { return nil }
         var components = DateComponents()
         components.day = day
         components.month = month
         components.year = year
-        return Calendar(identifier: .gregorian).date(from: components)
+        guard let date = gregorian.date(from: components) else { return nil }
+        let roundTrip = gregorian.dateComponents([.day, .month, .year], from: date)
+        guard roundTrip.day == day, roundTrip.month == month, roundTrip.year == year else { return nil }
+        return date
     }
 
     private static func extractContext(text: String, around range: Range<String.Index>) -> String {

@@ -81,13 +81,14 @@ final class AppState: ObservableObject {
 
         store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         ollamaSetup.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
-        ollamaSetup.$stage
-            .sink { [weak self] stage in
-                guard let self, stage == .ready else { return }
-                self.aiEnabled = true
-                self.hasSeenAIConsent = true
-            }
-            .store(in: &cancellables)
+        // Deliberately no "stage == .ready -> aiEnabled = true" sink here: that
+        // would enable AI the instant setup succeeds even if Ollama happened to
+        // already be installed/running before the user answered the consent
+        // screen (autoStart can reach .ready almost immediately in that case),
+        // silently enabling AI out from under a user who was about to tap Skip.
+        // Every consent surface (AIConsentSheet's onReady, onboarding's Skip)
+        // sets aiEnabled explicitly instead, so "enabled" only ever follows a
+        // real user action.
 
         if let folder = downloadsFolder {
             startMonitoring(folder: folder)

@@ -80,7 +80,11 @@ struct SettingsView: View {
                 setup: appState.ollamaSetup,
                 host: appState.ollamaHost,
                 model: appState.ollamaModel,
-                onReady: { showingConsent = false },
+                onReady: {
+                    appState.aiEnabled = true
+                    appState.hasSeenAIConsent = true
+                    showingConsent = false
+                },
                 onDecline: {
                     appState.hasSeenAIConsent = true
                     appState.aiEnabled = false

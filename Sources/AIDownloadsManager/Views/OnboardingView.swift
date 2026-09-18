@@ -91,22 +91,30 @@ struct OnboardingView: View {
                 host: appState.ollamaHost,
                 model: appState.ollamaModel,
                 autoStart: true,
-                onReady: { finish() }
+                onReady: { enableAndFinish() }
             )
             .frame(maxWidth: 460)
 
             Spacer()
 
-            Button("Skip — I'll set this up later", action: finish)
+            Button("Skip — I'll set this up later", action: declineAndFinish)
                 .padding(.bottom, 40)
         }
         .padding(40)
     }
 
-    private func finish() {
-        if appState.ollamaSetup.stage != .ready {
-            appState.hasSeenAIConsent = true
-        }
+    private func enableAndFinish() {
+        appState.aiEnabled = true
+        appState.hasSeenAIConsent = true
+        appState.hasCompletedOnboarding = true
+    }
+
+    /// Skip always means decline, even if setup happened to reach "ready" in
+    /// the background (e.g. Ollama was already installed and running) before
+    /// the user tapped this — an explicit Skip must never leave AI enabled.
+    private func declineAndFinish() {
+        appState.aiEnabled = false
+        appState.hasSeenAIConsent = true
         appState.hasCompletedOnboarding = true
     }
 

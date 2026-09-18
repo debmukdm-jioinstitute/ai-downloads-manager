@@ -42,6 +42,16 @@ final class ExpiryContextClassifierTests: XCTestCase {
         XCTAssertEqual(derived.eventType, .expiry)
     }
 
+    /// Regression test: a scanned image (passport photo, insurance card) has
+    /// no extracted text at all, only OCR output. `classify` must fall back
+    /// to `ocrText` for date-scanning — it previously only ever looked at
+    /// `text`, silently never producing expiry records for any OCR-only document.
+    func testOCROnlyTextIsScannedForDates() {
+        let drafts = ExpiryContextClassifier.classify(filename: "passport.jpg", text: "", ocrText: "Passport valid until: 12 March 2027", fromOCR: true)
+        XCTAssertEqual(drafts.count, 1)
+        XCTAssertEqual(drafts.first?.eventType, .expiry)
+    }
+
     func testAmbiguousContextGetsLowConfidenceNotAssertedExpiry() {
         let drafts = ExpiryContextClassifier.classify(filename: "notes.txt", text: "Some random note mentioning 12 March 2027 in passing.", ocrText: nil)
         XCTAssertEqual(drafts.first?.eventType, .eventDate)
