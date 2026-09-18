@@ -3,8 +3,10 @@ import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var voiceCoordinator: VoiceCoordinator
     @State private var showingConsent = false
     @State private var availableModels: [String] = []
+    @State private var voicePermissionDenied = false
 
     var body: some View {
         Form {
@@ -67,8 +69,49 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Talk to Nest") {
+                Toggle("Enable Voice Commands", isOn: Binding(
+                    get: { appState.voiceCommandsEnabled },
+                    set: { newValue in
+                        if newValue {
+                            Task {
+                                let granted = await VoiceCommandService.requestAuthorization()
+                                appState.voiceCommandsEnabled = granted
+                                voicePermissionDenied = !granted
+                                voiceCoordinator.refresh()
+                            }
+                        } else {
+                            appState.voiceCommandsEnabled = false
+                            voiceCoordinator.refresh()
+                        }
+                    }
+                ))
+
+                if voicePermissionDenied {
+                    Text("Microphone or Speech Recognition access was denied. Enable both for Nest in System Settings ▸ Privacy & Security.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                Toggle("Also listen for \"Hey Nest\"", isOn: Binding(
+                    get: { appState.wakeWordEnabled },
+                    set: { newValue in
+                        appState.wakeWordEnabled = newValue
+                        voiceCoordinator.refresh()
+                    }
+                ))
+                .disabled(!appState.voiceCommandsEnabled)
+
+                Toggle("Speak results aloud", isOn: $appState.speakResultsAloud)
+                    .disabled(!appState.voiceCommandsEnabled)
+
+                Text("Press Command+Option together anywhere to talk to Nest, or say \"Hey Nest\" if that's turned on. Speech recognition runs on-device when your Mac supports it, and nothing is sent anywhere.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("About") {
-                Text("AI Downloads Manager understands, organizes, and helps you search your Downloads folder. Nothing is ever deleted automatically, and files are only moved with your review or explicit rule.")
+                Text("Nest understands, organizes, and helps you search your Downloads folder. Nothing is ever deleted automatically, and files are only moved with your review or explicit rule.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

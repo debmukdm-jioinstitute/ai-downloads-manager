@@ -42,7 +42,7 @@ enum ExpiryNotificationService {
 
     private static func schedule(center: UNUserNotificationCenter, record: ExpiryRecord, fireDate: Date, body: String, suffix: String) {
         let content = UNMutableNotificationContent()
-        content.title = "AI Downloads Manager"
+        content.title = "Nest"
         content.body = body
         content.sound = .default
 

@@ -1,9 +1,10 @@
-# AI Downloads Manager
+# Nest
 
 A native macOS utility that watches your Downloads folder, understands what each
 file is (invoice, receipt, assignment, screenshot, research paper, ...), and
 lets you search and organize it in plain English — without ever deleting or
-moving a file without your say-so.
+moving a file without your say-so. Talk to it, too: press Command+Option
+anywhere, or say "Hey Nest".
 
 AI classification runs on a free, open-source local LLM via
 [Ollama](https://ollama.com) — no API key, no per-call cost, no rate limit,
@@ -21,9 +22,9 @@ Vision OCR, UniformTypeIdentifiers, QuickLook thumbnails) uses the real macOS
 frameworks the spec asked for.
 
 If you open this in Xcode, you can drag `Package.swift` in directly (File ▸
-Open) and run it as-is, or wrap `Sources/AIDownloadsManager` in a proper
-`.xcodeproj` app target with an Info.plist/entitlements for sandboxing and
-distribution.
+Open) and run it as-is, or wrap `Sources/Nest` in a proper `.xcodeproj` app
+target with an Info.plist/entitlements for sandboxing, microphone/speech
+usage-description keys (see the Voice section below), and distribution.
 
 ## Running it
 
@@ -56,6 +57,49 @@ onboarding screen and Settings, so a setup started in one place shows live in
 the other. Everything works without Ollama at all — you just get
 local/rule-based classification instead, and can turn AI on later whenever
 you want.
+
+## Talk to Nest
+
+Settings ▸ Talk to Nest ▸ Enable Voice Commands (off by default, requests
+microphone + speech recognition access). Once on:
+
+- **Command+Option, held together, anywhere** (`GlobalHotkeyMonitor`) opens a
+  floating mic overlay and listens until you pause or 12 seconds pass, then
+  routes the transcript into the Search tab exactly like typing it would.
+- **"Hey Nest"** (optional sub-toggle) runs the same continuous on-device
+  recognition (`VoiceCommandService`, `SFSpeechRecognizer` with
+  `requiresOnDeviceRecognition` where the Mac supports it) listening for the
+  wake phrase; whatever follows it in the same utterance becomes the query.
+  Saying "Hey Nest" with nothing after it opens the same overlay as the
+  hotkey, so you can finish the sentence separately.
+- An optional "speak results aloud" toggle gives a short spoken confirmation
+  (`SpeechOutputService`, `AVSpeechSynthesizer`, output-only, no permission
+  needed) while the Search tab runs the actual query.
+
+**Real constraints, not glossed over:**
+- The ⌘⌥ hotkey firing while Nest isn't the frontmost app requires
+  Accessibility permission (System Settings ▸ Privacy & Security ▸
+  Accessibility) — `GlobalHotkeyMonitor.requestAccessibilityIfNeeded()`
+  prompts for it once. Without that grant, the hotkey still works whenever
+  Nest itself is focused.
+- Speech framework recognition tasks have a bounded lifetime (roughly a
+  minute); continuous "Hey Nest" listening restarts itself before that limit
+  to stay effectively continuous, which means a very brief (sub-second) gap
+  every ~50 seconds where a wake phrase could theoretically be missed.
+- Microphone and Speech Recognition permission prompts are governed by TCC
+  and keyed to a signed app bundle with `NSMicrophoneUsageDescription` and
+  `NSSpeechRecognitionUsageDescription` in its Info.plist — this repo's bare
+  SPM executable has neither, so on some setups macOS may attribute the
+  permission prompt to the invoking terminal rather than to "Nest," or reuse
+  a prior grant. This is the same category of limitation documented below for
+  SwiftData/XCTest/notifications: fully correct end-to-end behavior needs the
+  Xcode `.xcodeproj` app-target migration, not just `swift build`.
+- Wake-word matching is a plain substring check on live transcription, not a
+  dedicated low-power wake-word engine (Apple doesn't expose "Hey Siri"'s
+  engine publicly) — it works, but keeps the microphone actively transcribing
+  the whole time it's on, which is real (if modest) CPU/battery cost. That
+  trade-off is exactly why it's a separate, off-by-default sub-toggle rather
+  than bundled into the base voice-commands switch.
 
 ## What's implemented
 
@@ -168,7 +212,7 @@ you want.
   - **Unified "Attention Center"** merging expiry with duplicates/other
     signals (spec §25) — Overview shows a lightweight expiry-only "Today's
     Attention" list instead of a full cross-feature center.
-- `Tests/AIDownloadsManagerTests` exists and is real (XCTest against
+- `Tests/NestTests` exists and is real (XCTest against
   `DateDetectionEngine`/`ExpiryContextClassifier`, including both regressions
   above), but **`swift test` needs Xcode.app** in this environment for the
   same reason SwiftData does — `XCTest.framework` isn't part of the

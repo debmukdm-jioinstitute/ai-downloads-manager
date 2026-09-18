@@ -28,7 +28,7 @@ struct OnboardingView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.tint)
 
-            Text("AI Downloads Manager")
+            Text("Nest")
                 .font(.largeTitle.bold())
 
             Text("Your Downloads folder, automatically understood.")

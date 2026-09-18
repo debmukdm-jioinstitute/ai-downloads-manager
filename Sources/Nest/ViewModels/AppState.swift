@@ -44,6 +44,21 @@ final class AppState: ObservableObject {
     }
     @Published var notificationsAuthorized = false
 
+    @Published var selectedSidebarSection: SidebarSection = .overview
+    /// Set by voice input (hotkey or "Hey Nest"); SearchView picks this up,
+    /// runs it, and clears it — this is how a voice command reaches the tab
+    /// that actually executes it.
+    @Published var pendingVoiceQuery: String?
+    @Published var voiceCommandsEnabled: Bool {
+        didSet { UserDefaults.standard.set(voiceCommandsEnabled, forKey: "voiceCommandsEnabled") }
+    }
+    @Published var wakeWordEnabled: Bool {
+        didSet { UserDefaults.standard.set(wakeWordEnabled, forKey: "wakeWordEnabled") }
+    }
+    @Published var speakResultsAloud: Bool {
+        didSet { UserDefaults.standard.set(speakResultsAloud, forKey: "speakResultsAloud") }
+    }
+
     let store: LibraryStore
     let ollamaSetup = OllamaSetupCoordinator()
     private var monitor: FolderMonitor?
@@ -67,6 +82,9 @@ final class AppState: ObservableObject {
         }
         self.notifyOnExpiry = UserDefaults.standard.object(forKey: "notifyOnExpiry") as? Bool ?? true
         self.notifyOnlyHighConfidence = UserDefaults.standard.object(forKey: "notifyOnlyHighConfidence") as? Bool ?? true
+        self.voiceCommandsEnabled = UserDefaults.standard.bool(forKey: "voiceCommandsEnabled")
+        self.wakeWordEnabled = UserDefaults.standard.bool(forKey: "wakeWordEnabled")
+        self.speakResultsAloud = UserDefaults.standard.object(forKey: "speakResultsAloud") as? Bool ?? true
 
         self.pipeline = FileIngestPipeline(
             store: store,
@@ -212,6 +230,15 @@ final class AppState: ObservableObject {
             notifyOnExpiry: notifyOnExpiry,
             onlyHighConfidence: notifyOnlyHighConfidence
         )
+    }
+
+    /// Routes a voice-recognized phrase (from the ⌘⌥ hotkey or "Hey Nest")
+    /// into the Search tab, which performs the actual search — this stays the
+    /// single place that runs a query, so a voice command doesn't trigger a
+    /// second, redundant AI interpretation call on top of what Search does.
+    func runVoiceCommand(_ transcript: String) {
+        selectedSidebarSection = .search
+        pendingVoiceQuery = transcript
     }
 
     func organizer() -> FileOrganizerService? {

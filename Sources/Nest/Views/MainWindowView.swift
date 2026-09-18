@@ -28,18 +28,24 @@ enum SidebarSection: String, CaseIterable, Identifiable {
 
 struct MainWindowView: View {
     @EnvironmentObject var appState: AppState
-    @State private var selection: SidebarSection? = .overview
     @State private var selectedFile: FileRecord?
+
+    private var selection: Binding<SidebarSection?> {
+        Binding(
+            get: { appState.selectedSidebarSection },
+            set: { appState.selectedSidebarSection = $0 ?? .overview }
+        )
+    }
 
     var body: some View {
         NavigationSplitView {
-            List(SidebarSection.allCases, selection: $selection) { section in
+            List(SidebarSection.allCases, selection: selection) { section in
                 Label(section.rawValue, systemImage: section.icon)
                     .tag(section)
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190)
         } content: {
-            switch selection ?? .overview {
+            switch appState.selectedSidebarSection {
             case .overview:
                 OverviewView(selectedFile: $selectedFile)
             case .allFiles:

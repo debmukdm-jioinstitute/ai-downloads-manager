@@ -38,6 +38,12 @@ struct SearchView: View {
         }
         .navigationTitle("Search")
         .onAppear { results = appState.allFiles() }
+        .onChange(of: appState.pendingVoiceQuery) { _, pending in
+            guard let pending else { return }
+            query = pending
+            runSearch()
+            appState.pendingVoiceQuery = nil
+        }
     }
 
     private func runSearch() {

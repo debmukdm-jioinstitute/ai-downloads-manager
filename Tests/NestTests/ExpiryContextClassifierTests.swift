@@ -1,5 +1,5 @@
 import XCTest
-@testable import AIDownloadsManager
+@testable import Nest
 
 final class ExpiryContextClassifierTests: XCTestCase {
 

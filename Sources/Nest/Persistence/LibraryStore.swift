@@ -26,8 +26,17 @@ final class LibraryStore: ObservableObject {
     }()
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("AIDownloadsManager", isDirectory: true)
+        let baseSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let appSupport = baseSupport.appendingPathComponent("Nest", isDirectory: true)
+
+        // One-time migration from the app's pre-rename data folder, so
+        // existing local libraries aren't silently orphaned by the rename.
+        let legacySupport = baseSupport.appendingPathComponent("AIDownloadsManager", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: appSupport.path),
+           FileManager.default.fileExists(atPath: legacySupport.path) {
+            try? FileManager.default.moveItem(at: legacySupport, to: appSupport)
+        }
+
         try? FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
         self.directory = appSupport
 

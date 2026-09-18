@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "AIDownloadsManager",
+    name: "Nest",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "AIDownloadsManager",
-            path: "Sources/AIDownloadsManager"
+            name: "Nest",
+            path: "Sources/Nest"
         ),
         .testTarget(
-            name: "AIDownloadsManagerTests",
-            dependencies: ["AIDownloadsManager"],
-            path: "Tests/AIDownloadsManagerTests"
+            name: "NestTests",
+            dependencies: ["Nest"],
+            path: "Tests/NestTests"
         )
     ]
 )
