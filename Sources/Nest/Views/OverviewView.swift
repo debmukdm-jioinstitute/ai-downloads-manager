@@ -4,6 +4,7 @@ struct OverviewView: View {
     @EnvironmentObject var appState: AppState
     @Binding var selectedFile: FileRecord?
     @State private var refreshToken = UUID()
+    @State private var selectedExpiryRecord: ExpiryRecord?
 
     var body: some View {
         ScrollView {
@@ -52,8 +53,14 @@ struct OverviewView: View {
                                  ? "\(record.title) — expired \(-days) day\(-days == 1 ? "" : "s") ago"
                                  : "\(record.title) — \(record.eventType.displayName.lowercased()) in \(days) day\(days == 1 ? "" : "s")")
                             Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         .font(.callout)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                        .onTapGesture { selectedExpiryRecord = record }
                     }
                 }
 
@@ -75,6 +82,9 @@ struct OverviewView: View {
             .padding(24)
         }
         .navigationTitle("Overview")
+        .sheet(item: $selectedExpiryRecord) { record in
+            ExpiryDetailView(record: record)
+        }
     }
 
     private func statCard(value: String, label: String, icon: String) -> some View {
