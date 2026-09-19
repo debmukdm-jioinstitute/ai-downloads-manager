@@ -22,8 +22,7 @@ struct CategoriesView: View {
                         if !subFiles.isEmpty {
                             DisclosureGroup("\(sub) (\(subFiles.count))") {
                                 ForEach(subFiles) { file in
-                                    FileRow(file: file)
-                                        .onTapGesture { selectedFile = file }
+                                    FileRow(file: file, onSelect: { selectedFile = file })
                                 }
                             }
                         }
@@ -35,7 +34,7 @@ struct CategoriesView: View {
             if !needsReview.isEmpty {
                 Section("Needs Review (\(needsReview.count))") {
                     ForEach(needsReview) { file in
-                        FileRow(file: file).onTapGesture { selectedFile = file }
+                        FileRow(file: file, onSelect: { selectedFile = file })
                     }
                 }
             }

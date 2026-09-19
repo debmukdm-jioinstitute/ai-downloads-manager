@@ -96,8 +96,7 @@ struct OverviewView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(needsReview.prefix(10)) { file in
-                        FileRow(file: file)
-                            .onTapGesture { selectedFile = file }
+                        FileRow(file: file, onSelect: { selectedFile = file })
                     }
                 }
         }
@@ -157,8 +156,7 @@ struct OverviewView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(searchResults, id: \.file.id) { result in
-                    FileRow(file: result.file, matchConfidence: result.confidence)
-                        .onTapGesture { selectedFile = result.file }
+                    FileRow(file: result.file, matchConfidence: result.confidence, onSelect: { selectedFile = result.file })
                 }
             }
         }
@@ -305,10 +303,49 @@ struct FileRow: View {
     /// of the file's own classification confidence — the two numbers answer
     /// different questions and showing both would just be confusing.
     var matchConfidence: Int? = nil
+    /// Callers that select this file on click pass this instead of chaining
+    /// an external `.onTapGesture` — that pattern, applied to the whole row,
+    /// would swallow the Apply Changes button's own click below (the exact
+    /// bug just fixed in Expiry Center's rows). Left nil for callers that
+    /// already get row selection for free from a real List `selection:`
+    /// binding (AllFiles, Search), which doesn't have that conflict and
+    /// shouldn't get a second, redundant gesture recognizer layered on top.
+    var onSelect: (() -> Void)? = nil
     @State private var isHovering = false
 
     var body: some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                identityBlock
+                Spacer()
+                if let matchConfidence {
+                    Text("\(matchConfidence)% match")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if let confidence = file.aiConfidence {
+                    Text("\(Int(confidence * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            SuggestedNameControl(file: file, compact: true)
+                .padding(.leading, 30)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(.quaternary.opacity(isHovering ? 0.35 : 0), in: RoundedRectangle(cornerRadius: 6))
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+
+    @ViewBuilder
+    private var identityBlock: some View {
+        let content = HStack {
             Image(systemName: iconName(for: file.fileExtension))
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
@@ -322,27 +359,11 @@ struct FileRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            Spacer()
-            if let matchConfidence {
-                Text("\(matchConfidence)% match")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if let confidence = file.aiConfidence {
-                Text("\(Int(confidence * 100))%")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
-        .background(.quaternary.opacity(isHovering ? 0.35 : 0), in: RoundedRectangle(cornerRadius: 6))
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovering = hovering
-            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        if let onSelect {
+            content.contentShape(Rectangle()).onTapGesture(perform: onSelect)
+        } else {
+            content
         }
     }
 

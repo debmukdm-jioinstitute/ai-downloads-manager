@@ -23,8 +23,7 @@ struct FileTypesView: View {
                             let extFiles = byExtension[ext] ?? []
                             DisclosureGroup("\(ext.uppercased()) (\(extFiles.count))") {
                                 ForEach(extFiles) { file in
-                                    FileRow(file: file)
-                                        .onTapGesture { selectedFile = file }
+                                    FileRow(file: file, onSelect: { selectedFile = file })
                                 }
                             }
                         }
