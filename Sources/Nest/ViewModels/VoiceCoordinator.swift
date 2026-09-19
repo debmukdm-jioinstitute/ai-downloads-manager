@@ -100,7 +100,7 @@ final class VoiceCoordinator: ObservableObject {
         overlay = .processing(transcript)
         appState.runVoiceCommand(transcript)
         if appState.speakResultsAloud {
-            SpeechOutputService.speak("Searching for \(transcript)")
+            SpeechOutputService.speak("Searching for \(transcript)", voiceIdentifier: appState.speechVoiceIdentifier)
         }
         overlay = .done(transcript)
         scheduleHide(after: 2)

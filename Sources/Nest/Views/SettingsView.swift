@@ -120,6 +120,20 @@ struct SettingsView: View {
                 Toggle("Speak results aloud", isOn: $appState.speakResultsAloud)
                     .disabled(!appState.voiceCommandsEnabled)
 
+                Picker("Voice", selection: $appState.speechVoiceIdentifier) {
+                    Text("System Default").tag("")
+                    ForEach(SpeechOutputService.availableIndicVoices(), id: \.identifier) { voice in
+                        Text("\(voice.name) (\(voice.language))").tag(voice.identifier)
+                    }
+                }
+                .disabled(!appState.voiceCommandsEnabled || !appState.speakResultsAloud)
+
+                if !SpeechOutputService.availableIndicVoices().isEmpty {
+                    Text("Indian-language voices are built into macOS at standard quality. For more natural-sounding speech, download the Enhanced or Premium version of the same voice for free in System Settings ▸ Accessibility ▸ Spoken Content ▸ System Voice.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Text("Press Command+Option together anywhere to talk to Nest, or say \"Hey Nest\" if that's turned on. Speech recognition runs on-device when your Mac supports it, and nothing is sent anywhere.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

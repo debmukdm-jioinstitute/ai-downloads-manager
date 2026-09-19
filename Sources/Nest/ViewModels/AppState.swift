@@ -58,6 +58,10 @@ final class AppState: ObservableObject {
     @Published var speakResultsAloud: Bool {
         didSet { UserDefaults.standard.set(speakResultsAloud, forKey: "speakResultsAloud") }
     }
+    /// AVSpeechSynthesisVoice identifier. Empty means "system default voice".
+    @Published var speechVoiceIdentifier: String {
+        didSet { UserDefaults.standard.set(speechVoiceIdentifier, forKey: "speechVoiceIdentifier") }
+    }
 
     let store: LibraryStore
     let ollamaSetup = OllamaSetupCoordinator()
@@ -93,6 +97,7 @@ final class AppState: ObservableObject {
         self.voiceCommandsEnabled = UserDefaults.standard.bool(forKey: "voiceCommandsEnabled")
         self.wakeWordEnabled = UserDefaults.standard.bool(forKey: "wakeWordEnabled")
         self.speakResultsAloud = UserDefaults.standard.object(forKey: "speakResultsAloud") as? Bool ?? true
+        self.speechVoiceIdentifier = UserDefaults.standard.string(forKey: "speechVoiceIdentifier") ?? ""
 
         self.pipeline = FileIngestPipeline(
             store: store,
