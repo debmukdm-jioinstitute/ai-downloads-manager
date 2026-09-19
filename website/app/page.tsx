@@ -50,9 +50,8 @@ export default function HomePage() {
           <div className="reveal delay-4">
             <HeroWindow />
           </div>
-          <FloatingChip className="float-a -left-2 top-[10%] hidden lg:block" title="Invoice" sub="Finance" />
-          <FloatingChip className="float-b -right-2 top-[6%] hidden md:block" title="Passport" sub="Expires 2027" />
-          <FloatingChip className="float-c -left-1 bottom-[8%] hidden xl:block" title="Hey Nest" sub="Voice ready" />
+          <FloatingChip className="float-b right-[-12px] top-[6%] hidden md:block" title="Passport" sub="Expires 2027" />
+          <FloatingChip className="float-c right-[-8px] bottom-[10%] hidden lg:block" title="Hey Nest" sub="Voice ready" />
         </div>
       </section>
 
