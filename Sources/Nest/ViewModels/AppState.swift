@@ -156,6 +156,17 @@ final class AppState: ObservableObject {
         return store.pruneFileRecords(notDirectChildrenOfAny: watchedFolders)
     }
 
+    /// Drops a single record the user just discovered points at a file that's
+    /// actually gone (moved or deleted outside Nest). Deliberately not a
+    /// background sweep — only ever called from a moment where the user is
+    /// looking straight at that one file, for the same reason `cleanUpLibrary`
+    /// above isn't automatic: a wrong existence check (e.g. an un-downloaded
+    /// iCloud placeholder) must never silently mass-delete records.
+    func removeMissingFile(_ record: FileRecord) {
+        store.removeFile(record)
+        store.insertActivity(ActivityEvent(kind: .deleted, message: "Removed from library — file no longer found on disk", filename: record.filename))
+    }
+
     /// Self-heal for a real classification bug: naive substring keyword
     /// matching classified anything mentioning "billion"/"billing" as an
     /// invoice (the word "bill" matched inside them). Fixing the matcher

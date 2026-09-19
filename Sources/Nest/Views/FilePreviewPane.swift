@@ -120,6 +120,8 @@ struct FilePreviewPane: View {
                 do {
                     try appState.organizer()?.delete(file)
                     onClose?()
+                } catch FileOrganizerError.sourceMissing {
+                    handleMissingSource()
                 } catch {
                     errorMessage = error.localizedDescription
                 }
@@ -128,7 +130,21 @@ struct FilePreviewPane: View {
         } message: {
             Text("This moves the file at \(file.currentPath) to the Trash. You can restore it from there if needed.")
         }
-        .task { await loadThumbnail() }
+        .task {
+            guard FileManager.default.fileExists(atPath: file.currentPath) else {
+                handleMissingSource()
+                return
+            }
+            await loadThumbnail()
+        }
+    }
+
+    /// The file this pane is showing turned out not to exist at its recorded
+    /// path (deleted or moved outside Nest) — drop it from the library and
+    /// close the pane rather than leave stale details on screen.
+    private func handleMissingSource() {
+        appState.removeMissingFile(file)
+        onClose?()
     }
 
     private func infoRow(_ label: String, _ value: String) -> some View {
@@ -148,6 +164,8 @@ struct FilePreviewPane: View {
                 Button("Rename") {
                     do {
                         try appState.organizer()?.rename(file, to: newName)
+                    } catch FileOrganizerError.sourceMissing {
+                        handleMissingSource()
                     } catch {
                         errorMessage = error.localizedDescription
                     }
@@ -182,6 +200,8 @@ struct FilePreviewPane: View {
                 Button("Move") {
                     do {
                         try appState.organizer()?.moveToCategory(file, category: moveCategory, subcategory: moveSubcategory)
+                    } catch FileOrganizerError.sourceMissing {
+                        handleMissingSource()
                     } catch {
                         errorMessage = error.localizedDescription
                     }
@@ -210,6 +230,8 @@ struct FilePreviewPane: View {
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         do {
             try appState.organizer()?.moveToFolder(file, destination: destination)
+        } catch FileOrganizerError.sourceMissing {
+            handleMissingSource()
         } catch {
             errorMessage = error.localizedDescription
         }
