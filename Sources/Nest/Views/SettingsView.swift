@@ -12,24 +12,26 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Downloads Folder") {
-                HStack {
-                    Text(appState.downloadsFolder?.path ?? "Not set")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Rescan Now") {
-                        if let folder = appState.downloadsFolder { appState.scanExistingFiles(in: folder) }
-                    }
-                    .disabled(appState.downloadsFolder == nil)
-                    Button("Change...") { chooseFolder() }
+            Section("Watched Folders") {
+                if appState.watchedFolders.isEmpty {
+                    Text("Not set").foregroundStyle(.secondary)
                 }
+                ForEach(appState.watchedFolders, id: \.self) { folder in
+                    HStack {
+                        Text(folder.path).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Button("Rescan") { appState.scanExistingFiles(in: folder) }
+                        Button("Remove") { appState.removeWatchedFolder(folder) }
+                    }
+                }
+                Button("Add Folder…") { addFolder() }
 
                 Button("Clean Up Library…") { showingCleanupConfirm = true }
-                    .disabled(appState.downloadsFolder == nil)
+                    .disabled(appState.watchedFolders.isEmpty)
                 if let cleanupResultMessage {
                     Text(cleanupResultMessage).font(.caption).foregroundStyle(.secondary)
                 }
-                Text("Removes indexed entries that aren't actually inside the folder above (e.g. leftovers from previously watching a different folder). Only removes Nest's own index — never touches your real files.")
+                Text("Nest isn't limited to one folder — add as many as you want (Downloads, Desktop, a project folder, ...). \"Clean Up Library\" removes indexed entries that aren't actually inside any of the folders above (e.g. leftovers from a folder you removed). Only removes Nest's own index — never touches your real files.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -172,11 +174,11 @@ struct SettingsView: View {
             Button("Clean Up") {
                 let removed = appState.cleanUpLibrary()
                 cleanupResultMessage = removed == 0
-                    ? "Nothing to clean up — everything indexed is inside \(appState.downloadsFolder?.path ?? "the watched folder")."
-                    : "Removed \(removed) indexed entr\(removed == 1 ? "y" : "ies") that weren't inside \(appState.downloadsFolder?.path ?? "the watched folder"). Your actual files were never touched."
+                    ? "Nothing to clean up — everything indexed is inside a watched folder."
+                    : "Removed \(removed) indexed entr\(removed == 1 ? "y" : "ies") that weren't inside any watched folder. Your actual files were never touched."
             }
         } message: {
-            Text("This removes any indexed file entries that aren't inside \(appState.downloadsFolder?.path ?? "the watched folder") — for example, leftovers from previously watching a different folder. It only affects Nest's own index; your real files on disk are never touched or deleted.")
+            Text("This removes any indexed file entries that aren't inside one of the folders above — for example, leftovers from a folder you removed. It only affects Nest's own index; your real files on disk are never touched or deleted.")
         }
     }
 
@@ -189,13 +191,13 @@ struct SettingsView: View {
         )
     }
 
-    private func chooseFolder() {
+    private func addFolder() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let url = panel.url {
-            appState.chooseFolder(url)
+        panel.allowsMultipleSelection = true
+        if panel.runModal() == .OK {
+            for url in panel.urls { appState.addWatchedFolder(url) }
         }
     }
 }

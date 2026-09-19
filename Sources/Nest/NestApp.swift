@@ -29,10 +29,10 @@ struct NestApp: App {
                     // app's custom SwiftUI list rows is unreliable. Never set by a
                     // normal Finder/Dock launch, so it can't fire unintentionally.
                     if ProcessInfo.processInfo.environment["NEST_FORCE_RESCAN"] == "1" {
-                        FileHandle.standardError.write("NEST_DEBUG: env var seen, downloadsFolder=\(String(describing: appState.downloadsFolder))\n".data(using: .utf8)!)
-                        if let folder = appState.downloadsFolder {
+                        FileHandle.standardError.write("NEST_DEBUG: env var seen, watchedFolders=\(appState.watchedFolders.map(\.path))\n".data(using: .utf8)!)
+                        for folder in appState.watchedFolders {
                             let listing = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-                            FileHandle.standardError.write("NEST_DEBUG: listing count=\(listing?.count ?? -1)\n".data(using: .utf8)!)
+                            FileHandle.standardError.write("NEST_DEBUG: \(folder.path) listing count=\(listing?.count ?? -1)\n".data(using: .utf8)!)
                             appState.scanExistingFiles(in: folder)
                         }
                     }

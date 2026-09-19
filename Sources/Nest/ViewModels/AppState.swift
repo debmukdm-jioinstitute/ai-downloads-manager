@@ -5,7 +5,10 @@ import Combine
 @MainActor
 final class AppState: ObservableObject {
     @Published var hasCompletedOnboarding: Bool
-    @Published var downloadsFolder: URL?
+    /// Every folder Nest watches. Was a single `downloadsFolder: URL?` —
+    /// widened to a list so the app isn't restricted to one folder (still
+    /// scoped to folders the user explicitly picks, not the whole disk).
+    @Published var watchedFolders: [URL] = []
     @Published var aiEnabled: Bool {
         didSet { UserDefaults.standard.set(aiEnabled, forKey: "aiEnabled") }
     }
@@ -65,15 +68,15 @@ final class AppState: ObservableObject {
 
     let store: LibraryStore
     let ollamaSetup = OllamaSetupCoordinator()
-    private var monitor: FolderMonitor?
+    private var monitors: [String: FolderMonitor] = [:] // keyed by standardized folder path
     private var pipeline: FileIngestPipeline?
     private var expiryPipeline: ExpiryDetectionPipeline?
     private var cancellables: Set<AnyCancellable> = []
 
     init(store: LibraryStore) {
         self.store = store
-        self.hasCompletedOnboarding = FolderAccessStore.hasSavedFolder
-        self.downloadsFolder = FolderAccessStore.resolve()
+        self.hasCompletedOnboarding = FolderAccessStore.hasSavedFolders
+        self.watchedFolders = FolderAccessStore.resolveAll()
         self.aiEnabled = UserDefaults.standard.bool(forKey: "aiEnabled")
         self.hasSeenAIConsent = UserDefaults.standard.bool(forKey: "hasSeenAIConsent")
         self.ollamaHost = UserDefaults.standard.string(forKey: "ollamaHost") ?? "http://localhost:11434"
@@ -103,7 +106,7 @@ final class AppState: ObservableObject {
             store: store,
             aiServiceProvider: { [weak self] in self?.makeAIService() ?? NullAIService() },
             aiEnabledProvider: { [weak self] in self?.aiEnabled ?? false },
-            rootFolderProvider: { [weak self] in self?.downloadsFolder }
+            rootFoldersProvider: { [weak self] in self?.watchedFolders ?? [] }
         )
         self.expiryPipeline = ExpiryDetectionPipeline(
             store: store,
@@ -122,7 +125,7 @@ final class AppState: ObservableObject {
         // sets aiEnabled explicitly instead, so "enabled" only ever follows a
         // real user action.
 
-        if let folder = downloadsFolder {
+        for folder in watchedFolders {
             startMonitoring(folder: folder)
         }
         reclassifyLocallyClassifiedFiles()
@@ -139,8 +142,8 @@ final class AppState: ObservableObject {
     /// deletion. It only ever removes index/metadata, never the real files.
     @discardableResult
     func cleanUpLibrary() -> Int {
-        guard let folder = downloadsFolder else { return 0 }
-        return store.pruneFileRecords(notDirectChildrenOf: folder)
+        guard !watchedFolders.isEmpty else { return 0 }
+        return store.pruneFileRecords(notDirectChildrenOfAny: watchedFolders)
     }
 
     /// Self-heal for a real classification bug: naive substring keyword
@@ -182,13 +185,38 @@ final class AppState: ObservableObject {
         return OllamaAIService(host: ollamaHost, model: ollamaModel)
     }
 
-    /// Used by onboarding: picks the folder without finishing onboarding yet,
-    /// so the AI setup step can run before landing on the dashboard.
-    func selectFolder(_ url: URL) {
-        FolderAccessStore.save(url: url)
-        downloadsFolder = url
+    /// Adds a folder to the watch list — a no-op if it's already watched —
+    /// starts monitoring it, and scans its existing contents. This is the
+    /// one path both onboarding's first folder and Settings' "Add Folder"
+    /// go through, so a user is never limited to a single folder.
+    func addWatchedFolder(_ url: URL) {
+        let standardized = url.standardizedFileURL.path
+        guard !watchedFolders.contains(where: { $0.standardizedFileURL.path == standardized }) else { return }
+        FolderAccessStore.addFolder(url)
+        watchedFolders.append(url)
         startMonitoring(folder: url)
         scanExistingFiles(in: url)
+    }
+
+    /// Stops watching a folder. Deliberately does NOT remove its already-
+    /// indexed files — that stays an explicit, confirmed action via "Clean
+    /// Up Library" rather than an automatic side effect of unwatching, for
+    /// the same reason the automatic prune was removed earlier: an automatic
+    /// mass-delete tied to a setting change is exactly what caused a real
+    /// data-loss incident.
+    func removeWatchedFolder(_ url: URL) {
+        let standardized = url.standardizedFileURL.path
+        monitors[standardized]?.stop()
+        monitors[standardized] = nil
+        watchedFolders.removeAll { $0.standardizedFileURL.path == standardized }
+        FolderAccessStore.removeFolder(url)
+        isMonitoring = !monitors.isEmpty
+    }
+
+    /// Used by onboarding: adds the folder without finishing onboarding yet,
+    /// so the AI setup step can run before landing on the dashboard.
+    func selectFolder(_ url: URL) {
+        addWatchedFolder(url)
     }
 
     func chooseFolder(_ url: URL) {
@@ -197,12 +225,14 @@ final class AppState: ObservableObject {
     }
 
     func startMonitoring(folder: URL) {
-        monitor?.stop()
-        monitor = FolderMonitor(folderURL: folder) { [weak self] paths in
+        let standardized = folder.standardizedFileURL.path
+        monitors[standardized]?.stop()
+        let monitor = FolderMonitor(folderURL: folder) { [weak self] paths in
             guard let self else { return }
             Task { await self.handleChangedPaths(paths) }
         }
-        monitor?.start()
+        monitors[standardized] = monitor
+        monitor.start()
         isMonitoring = true
     }
 
@@ -306,8 +336,8 @@ final class AppState: ObservableObject {
     }
 
     func organizer() -> FileOrganizerService? {
-        guard let folder = downloadsFolder else { return nil }
-        return FileOrganizerService(store: store, rootFolder: folder)
+        guard !watchedFolders.isEmpty else { return nil }
+        return FileOrganizerService(store: store)
     }
 
     // MARK: - Dashboard queries

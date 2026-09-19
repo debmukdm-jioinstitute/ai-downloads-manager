@@ -22,14 +22,17 @@ enum FileOrganizerError: Error, LocalizedError {
 @MainActor
 final class FileOrganizerService {
     private let store: LibraryStore
-    private let rootFolder: URL
 
-    init(store: LibraryStore, rootFolder: URL) {
+    init(store: LibraryStore) {
         self.store = store
-        self.rootFolder = rootFolder
     }
 
-    /// Moves a file into `category/subcategory` beneath the root folder.
+    /// Moves a file into `category/subcategory` beneath the watched folder
+    /// it was originally found in. With multiple watched folders, each file
+    /// stays organized within its own — `originalPath` never changes once a
+    /// file is ingested (unlike `currentPath`, which moves), so its parent
+    /// directory is always that file's true watched root regardless of how
+    /// many times it's since been moved or renamed.
     /// Never overwrites: if a name collision exists, a " 2", " 3"... suffix is used.
     @discardableResult
     func moveToCategory(_ record: FileRecord, category: String, subcategory: String?) throws -> OperationRecord {
@@ -40,6 +43,7 @@ final class FileOrganizerService {
         let sourceURL = URL(fileURLWithPath: record.currentPath)
         guard fm.fileExists(atPath: sourceURL.path) else { throw FileOrganizerError.sourceMissing }
 
+        let rootFolder = URL(fileURLWithPath: record.originalPath).deletingLastPathComponent()
         var destDir = rootFolder.appendingPathComponent(category, isDirectory: true)
         if let subcategory { destDir.appendPathComponent(subcategory, isDirectory: true) }
 

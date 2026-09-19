@@ -37,7 +37,7 @@ struct OverviewView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-                if let folder = appState.downloadsFolder {
+                ForEach(appState.watchedFolders, id: \.self) { folder in
                     WatchedFolderRow(folder: folder, isMonitoring: appState.isMonitoring)
                 }
 

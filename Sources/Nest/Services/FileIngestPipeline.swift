@@ -8,22 +8,22 @@ final class FileIngestPipeline {
     private let store: LibraryStore
     private var aiServiceProvider: () -> AIService
     private var aiEnabledProvider: () -> Bool
-    private var rootFolderProvider: () -> URL?
+    private var rootFoldersProvider: () -> [URL]
 
-    init(store: LibraryStore, aiServiceProvider: @escaping () -> AIService, aiEnabledProvider: @escaping () -> Bool, rootFolderProvider: @escaping () -> URL?) {
+    init(store: LibraryStore, aiServiceProvider: @escaping () -> AIService, aiEnabledProvider: @escaping () -> Bool, rootFoldersProvider: @escaping () -> [URL]) {
         self.store = store
         self.aiServiceProvider = aiServiceProvider
         self.aiEnabledProvider = aiEnabledProvider
-        self.rootFolderProvider = rootFolderProvider
+        self.rootFoldersProvider = rootFoldersProvider
     }
 
     /// Skips files that are unreadable, already indexed at the same path+hash,
-    /// unsupported system files, or not a *direct* child of the watched
-    /// folder. That last check is the authoritative guard against ever
-    /// ingesting nested project internals (.build, .git, node_modules, ...) —
-    /// FSEvents reports file changes anywhere in the watched subtree, and a
-    /// Downloads folder is meant to be flat, so anything nested is never a
-    /// real download regardless of which code path called this.
+    /// unsupported system files, or not a *direct* child of one of the
+    /// watched folders. That last check is the authoritative guard against
+    /// ever ingesting nested project internals (.build, .git, node_modules,
+    /// ...) — FSEvents reports file changes anywhere in the watched subtree,
+    /// and a watched folder is meant to be flat, so anything nested is never
+    /// a real download regardless of which code path called this.
     /// Returns the created (or already up-to-date) record, or nil if the file was skipped.
     @discardableResult
     func ingest(path: String) async -> FileRecord? {
@@ -32,8 +32,10 @@ final class FileIngestPipeline {
         let url = URL(fileURLWithPath: path)
         let name = url.lastPathComponent
         guard !name.hasPrefix("."), !name.isEmpty else { return nil }
-        if let root = rootFolderProvider() {
-            guard url.deletingLastPathComponent().standardizedFileURL.path == root.standardizedFileURL.path else { return nil }
+        let roots = rootFoldersProvider()
+        if !roots.isEmpty {
+            let parent = url.deletingLastPathComponent().standardizedFileURL.path
+            guard roots.contains(where: { $0.standardizedFileURL.path == parent }) else { return nil }
         }
 
         guard let attrs = try? fm.attributesOfItem(atPath: path),

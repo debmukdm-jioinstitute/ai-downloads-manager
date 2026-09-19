@@ -61,14 +61,15 @@ final class LibraryStore: ObservableObject {
     /// One-time (self-healing, cheap to call repeatedly) cleanup for a bug
     /// where FSEvents' recursive subtree reporting let build/git internals
     /// (.build, .git, Sources/, ...) get ingested as if they were downloads
-    /// whenever a project folder lived inside the watched Downloads folder.
-    /// Removes anything that isn't a direct child of `folder`, plus any
-    /// expiry records that pointed at it. Returns how many were removed.
+    /// whenever a project folder lived inside a watched folder. Removes
+    /// anything that isn't a direct child of any currently-watched folder,
+    /// plus any expiry records that pointed at it. Returns how many were
+    /// removed.
     @discardableResult
-    func pruneFileRecords(notDirectChildrenOf folder: URL) -> Int {
-        let root = folder.standardizedFileURL.path
+    func pruneFileRecords(notDirectChildrenOfAny folders: [URL]) -> Int {
+        let roots = Set(folders.map { $0.standardizedFileURL.path })
         let idsToRemove = Set(fileRecords.filter {
-            URL(fileURLWithPath: $0.currentPath).deletingLastPathComponent().standardizedFileURL.path != root
+            !roots.contains(URL(fileURLWithPath: $0.currentPath).deletingLastPathComponent().standardizedFileURL.path)
         }.map(\.id))
         guard !idsToRemove.isEmpty else { return 0 }
         fileRecords.removeAll { idsToRemove.contains($0.id) }
