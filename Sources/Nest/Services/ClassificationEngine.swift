@@ -25,10 +25,23 @@ enum ClassificationEngine {
     private static let researchWords = ["abstract", "references", "et al.", "doi:", "journal of"]
     private static let ticketWords = ["boarding pass", "e-ticket", "itinerary", "pnr", "confirmation number"]
     private static let resumeWords = ["curriculum vitae", "resume", "objective:"]
+    private static let offerLetterWords = ["pleased to offer you", "we are pleased to offer", "offer letter", "letter of appointment", "date of joining", "terms of your employment", "your employment contract"]
+
+    // Real invoices, receipts, statements, tax docs, and tickets always
+    // declare themselves in their header/opening — that's a document
+    // convention, not a heuristic guess. Scanning the full body (up to
+    // 20,000 chars) for these phrases means one incidental mention deep in
+    // an otherwise-unrelated long document (e.g. a resignation-recovery
+    // clause saying "outstanding amount due" in a multi-page employment
+    // contract) outweighs everything else and mislabels the whole file.
+    // Windowing to the opening is both more accurate (matches where these
+    // phrases actually mean what they say) and strictly cheaper to scan.
+    private static let transactionalScanWindow = 2000
 
     static func classify(filename: String, fileExtension: String, extractedText: String?, ocrText: String?) -> LocalClassification {
         let lowerName = filename.lowercased()
-        let text = ((extractedText ?? "") + " " + (ocrText ?? "")).lowercased()
+        let fullText = ((extractedText ?? "") + " " + (ocrText ?? "")).lowercased()
+        let text = String(fullText.prefix(transactionalScanWindow))
         let ext = fileExtension.lowercased()
 
         // Screenshots are near-certain from filename convention.
@@ -46,14 +59,23 @@ enum ClassificationEngine {
             return LocalClassification(category: "Other", subcategory: "Uncategorized", tags: ["archive"], vendor: nil, documentType: "archive", amount: nil, currency: nil, confidence: 0.5, reason: "ZIP archives are not opened automatically; classify by filename only.")
         }
 
+        // Checked before the financial categories on purpose: an offer
+        // letter's defining phrases ("pleased to offer you", "date of
+        // joining") are specific and unambiguous, whereas a generic phrase
+        // like "amount due" is common boilerplate in employment contracts'
+        // resignation/recovery clauses and should not be allowed to outrank
+        // a document that has already clearly identified itself.
+        if containsAny(text, offerLetterWords) {
+            return LocalClassification(category: "Personal", subcategory: "Applications", tags: ["offer-letter"], vendor: nil, documentType: "offer letter", amount: nil, currency: nil, confidence: 0.8, reason: "Text contains offer-letter/employment-contract phrasing.")
+        }
         if containsAny(text, invoiceWords) || TextMatching.containsWord(lowerName, "invoice") {
-            return LocalClassification(category: "Finance", subcategory: "Invoices", tags: ["invoice"], vendor: extractVendor(from: text) ?? extractVendor(from: lowerName), documentType: "invoice", amount: extractAmount(from: text), currency: extractCurrency(from: text), confidence: 0.75, reason: "Text/filename contains invoice-related keywords.")
+            return LocalClassification(category: "Finance", subcategory: "Invoices", tags: ["invoice"], vendor: extractVendor(from: fullText) ?? extractVendor(from: lowerName), documentType: "invoice", amount: extractAmount(from: fullText), currency: extractCurrency(from: fullText), confidence: 0.75, reason: "Text/filename contains invoice-related keywords.")
         }
         if containsAny(text, receiptWords) || TextMatching.containsWord(lowerName, "receipt") {
-            return LocalClassification(category: "Finance", subcategory: "Receipts", tags: ["receipt"], vendor: extractVendor(from: text) ?? extractVendor(from: lowerName), documentType: "receipt", amount: extractAmount(from: text), currency: extractCurrency(from: text), confidence: 0.7, reason: "Text/filename contains receipt-related keywords.")
+            return LocalClassification(category: "Finance", subcategory: "Receipts", tags: ["receipt"], vendor: extractVendor(from: fullText) ?? extractVendor(from: lowerName), documentType: "receipt", amount: extractAmount(from: fullText), currency: extractCurrency(from: fullText), confidence: 0.7, reason: "Text/filename contains receipt-related keywords.")
         }
         if containsAny(text, statementWords) || TextMatching.containsWord(lowerName, "statement") {
-            return LocalClassification(category: "Finance", subcategory: "Statements", tags: ["statement"], vendor: extractVendor(from: text), documentType: "statement", amount: nil, currency: extractCurrency(from: text), confidence: 0.65, reason: "Text/filename contains bank/account statement keywords.")
+            return LocalClassification(category: "Finance", subcategory: "Statements", tags: ["statement"], vendor: extractVendor(from: fullText), documentType: "statement", amount: nil, currency: extractCurrency(from: fullText), confidence: 0.65, reason: "Text/filename contains bank/account statement keywords.")
         }
         if containsAny(text, taxWords) || TextMatching.containsWord(lowerName, "tax") {
             return LocalClassification(category: "Finance", subcategory: "Tax Documents", tags: ["tax"], vendor: nil, documentType: "tax document", amount: nil, currency: nil, confidence: 0.6, reason: "Text/filename contains tax-related keywords.")
@@ -61,13 +83,13 @@ enum ClassificationEngine {
         if containsAny(text, ticketWords) || TextMatching.containsWord(lowerName, "ticket") || TextMatching.containsWord(lowerName, "boarding") {
             return LocalClassification(category: "Personal", subcategory: "Tickets", tags: ["travel"], vendor: nil, documentType: "ticket", amount: nil, currency: nil, confidence: 0.7, reason: "Text/filename contains travel ticket keywords.")
         }
-        if containsAny(text, assignmentWords) || TextMatching.containsWord(lowerName, "assignment") {
+        if containsAny(fullText, assignmentWords) || TextMatching.containsWord(lowerName, "assignment") {
             return LocalClassification(category: "Education", subcategory: "Assignments", tags: ["assignment"], vendor: nil, documentType: "assignment", amount: nil, currency: nil, confidence: 0.65, reason: "Text/filename contains assignment/homework keywords.")
         }
-        if containsAny(text, researchWords) {
+        if containsAny(fullText, researchWords) {
             return LocalClassification(category: "Education", subcategory: "Research Papers", tags: ["research"], vendor: nil, documentType: "research paper", amount: nil, currency: nil, confidence: 0.6, reason: "Text contains academic citation patterns.")
         }
-        if containsAny(text, resumeWords) {
+        if containsAny(fullText, resumeWords) {
             return LocalClassification(category: "Personal", subcategory: "Applications", tags: ["resume"], vendor: nil, documentType: "resume", amount: nil, currency: nil, confidence: 0.6, reason: "Text contains resume/CV keywords.")
         }
 
