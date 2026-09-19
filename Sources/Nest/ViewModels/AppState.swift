@@ -73,6 +73,11 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(autoOrganizeConfidentFiles, forKey: "autoOrganizeConfidentFiles") }
     }
 
+    /// OAuth session from nestapp.vercel.app (optional — local Nest works without signing in).
+    @Published private(set) var authSession: NestAuthSession?
+
+    var isSignedIn: Bool { authSession != nil }
+
     let store: LibraryStore
     let ollamaSetup = OllamaSetupCoordinator()
     private var monitors: [String: FolderMonitor] = [:] // keyed by standardized folder path
@@ -109,6 +114,7 @@ final class AppState: ObservableObject {
         self.speakResultsAloud = UserDefaults.standard.object(forKey: "speakResultsAloud") as? Bool ?? true
         self.speechVoiceIdentifier = UserDefaults.standard.string(forKey: "speechVoiceIdentifier") ?? ""
         self.autoOrganizeConfidentFiles = UserDefaults.standard.bool(forKey: "autoOrganizeConfidentFiles")
+        self.authSession = AuthSessionStore.load()
 
         self.pipeline = FileIngestPipeline(
             store: store,
@@ -606,5 +612,35 @@ final class AppState: ObservableObject {
             storageUsedBytes: totalSize,
             totalFiles: files.count
         )
+    }
+
+    func signInWithOAuth() async {
+        do {
+            let session = try await OAuthSignInService.shared.signIn()
+            try AuthSessionStore.save(session)
+            authSession = session
+            lastError = nil
+        } catch {
+            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func signOutAccount() {
+        AuthSessionStore.clear()
+        authSession = nil
+    }
+
+    @discardableResult
+    func handleAuthURL(_ url: URL) -> Bool {
+        guard let session = OAuthSignInService.parseCallback(url) else { return false }
+        do {
+            try AuthSessionStore.save(session)
+            authSession = session
+            lastError = nil
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
     }
 }

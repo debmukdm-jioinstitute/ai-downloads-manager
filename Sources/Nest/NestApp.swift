@@ -21,6 +21,9 @@ struct NestApp: App {
                 .overlay(alignment: .bottom) {
                     VoiceOverlayView(coordinator: voiceCoordinator)
                 }
+                .onOpenURL { url in
+                    appState.handleAuthURL(url)
+                }
                 .onAppear {
                     voiceCoordinator.start()
                     // Headless verification hooks only, never set by a normal

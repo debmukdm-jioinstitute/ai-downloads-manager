@@ -9,9 +9,37 @@ struct SettingsView: View {
     @State private var voicePermissionDenied = false
     @State private var showingCleanupConfirm = false
     @State private var cleanupResultMessage: String?
+    @State private var isSigningIn = false
 
     var body: some View {
         Form {
+            Section("Account") {
+                if let session = appState.authSession {
+                    if let name = session.displayName, !name.isEmpty {
+                        Text(name).font(.headline)
+                    }
+                    if let email = session.email {
+                        Text(email).foregroundStyle(.secondary)
+                    }
+                    Text("Signed in with OAuth. Your files still stay on this Mac.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Sign Out") { appState.signOutAccount() }
+                } else {
+                    Text("Optional — sign in to link your Nest account. No password; GitHub or Google OAuth in your browser.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button(isSigningIn ? "Opening sign-in…" : "Sign In with OAuth") {
+                        isSigningIn = true
+                        Task {
+                            await appState.signInWithOAuth()
+                            isSigningIn = false
+                        }
+                    }
+                    .disabled(isSigningIn)
+                }
+            }
+
             Section("Watched Folders") {
                 if appState.watchedFolders.isEmpty {
                     Text("Not set").foregroundStyle(.secondary)

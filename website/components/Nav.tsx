@@ -1,5 +1,6 @@
 "use client";
 
+import { AuthNav } from "@/components/AuthNav";
 import { DMG_URL } from "@/lib/links";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
@@ -36,15 +37,18 @@ export function Nav() {
             </a>
           ))}
         </nav>
-        <motion.a
-          href={DMG_URL}
-          className="nav-download rounded-full bg-[#0071e3] px-3 py-[5px] text-[12px] text-white"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.96 }}
-          transition={springSnappy}
-        >
-          Download
-        </motion.a>
+        <div className="flex items-center gap-3">
+          <AuthNav />
+          <motion.a
+            href={DMG_URL}
+            className="nav-download rounded-full bg-[#0071e3] px-3 py-[5px] text-[12px] text-white"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
+            transition={springSnappy}
+          >
+            Download
+          </motion.a>
+        </div>
       </div>
     </header>
   );
