@@ -42,7 +42,7 @@ export default function HomePage() {
             </a>
           </div>
           <p className="reveal delay-4 mt-4 text-[12px] text-[#86868b]">
-            Apple Silicon · macOS 14 Sonoma or later · Free
+            Apple Silicon · macOS 14 Sonoma or later · Free &amp; open source
           </p>
         </div>
 
@@ -55,7 +55,77 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="border-y border-black/5 bg-white py-6">
+      <section id="install" className="border-y border-black/5 bg-white py-20 md:py-28">
+        <div className="mx-auto max-w-[820px] px-6">
+          <Reveal>
+            <p className="eyebrow text-center">Install</p>
+            <h2 className="display mt-3 text-center text-[36px] md:text-[52px]">
+              macOS will act dramatic. You won&apos;t need therapy.
+            </h2>
+            <p className="mx-auto mt-5 max-w-[52ch] text-center text-[19px] leading-relaxed text-[#6e6e73]">
+              Gatekeeper sees a download that isn&apos;t App Store–blessed and gets suspicious. Fair. Nest is{" "}
+              <strong className="font-semibold text-[#1d1d1f]">free</strong>,{" "}
+              <a className="text-[#0071e3]" href={GITHUB_URL}>
+                open source
+              </a>
+              , and refreshingly light on business models — no account, no subscription, no &ldquo;premium tier for
+              your own passport.&rdquo; Just a .dmg and two lines in Terminal.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+              <a className="pill" href={DMG_URL}>
+                Download Nest-1.0.1.dmg
+              </a>
+            </div>
+          </Reveal>
+
+          <ol className="mt-14 space-y-4 text-left">
+            <InstallStep
+              n="01"
+              title="Grab the disk image"
+              body="Hit download above (or from GitHub Releases). No checkout page. No trial that expires in 14 days. We're not built to charge you — we're built to sort your Downloads folder."
+            />
+            <InstallStep
+              n="02"
+              title="Drag Nest into Applications"
+              body="Open Nest-1.0.1.dmg, drag the Nest icon onto the Applications folder shortcut. That's the whole “installer.” Very vintage. Very valid."
+            />
+            <InstallStep
+              n="03"
+              title="Open Terminal"
+              body="Press ⌘Space, type Terminal, press Return. macOS quarantines apps from the internet until you say hello. We're not malware; we're just indie and not notarized yet."
+            />
+            <li className="rounded-[24px] bg-[#f5f5f7] p-6 md:p-8">
+              <span className="text-[13px] font-semibold text-[#86868b]">04</span>
+              <h3 className="mt-2 text-[19px] font-semibold tracking-tight">Paste these two lines, then Return</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-[#6e6e73]">
+                First line clears the quarantine sticker Apple puts on downloaded apps. Second line actually opens Nest.
+                If macOS previously showed &ldquo;Nest Not Opened,&rdquo; this is the polite fix — not &ldquo;Move to
+                Bin.&rdquo;
+              </p>
+              <div className="install-terminal" aria-label="Terminal commands to install Nest">
+                <code>
+                  <span className="prompt">$ </span>
+                  {"xattr -dr com.apple.quarantine /Applications/Nest.app\n"}
+                  <span className="prompt">$ </span>
+                  open /Applications/Nest.app
+                </code>
+              </div>
+              <p className="mt-3 text-[13px] text-[#86868b]">
+                Prefer clicks? Right-click Nest in Applications → Open → Open, or run{" "}
+                <span className="font-mono text-[12px] text-[#6e6e73]">Open Nest (First Time).command</span> from the
+                .dmg instead.
+              </p>
+            </li>
+            <InstallStep
+              n="05"
+              title="Say hi to Nest"
+              body="Choose your watched folder (Downloads is the default), decide if you want local AI via Ollama, and let it classify what's already there. Then pretend you were always this organized."
+            />
+          </ol>
+        </div>
+      </section>
+
+      <section className="border-b border-black/5 bg-white py-6">
         <div className="marquee">
           <div className="marquee-track">
             {[...fileKinds, ...fileKinds].map((kind, i) => (
@@ -200,51 +270,30 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="install" className="bg-white py-24 md:py-32">
+      <section className="bg-white py-20 md:py-24">
         <div className="mx-auto max-w-[820px] px-6 text-center">
           <Reveal>
-            <p className="eyebrow">Download</p>
-            <h2 className="display mt-3 text-[40px] md:text-[56px]">Get Nest.</h2>
-            <p className="mx-auto mt-5 max-w-[46ch] text-[19px] leading-relaxed text-[#6e6e73]">
-              A single .dmg. Drag to Applications. Built for Apple Silicon Macs running macOS 14 or later.
+            <h2 className="display text-[32px] md:text-[40px]">Still here? Good.</h2>
+            <p className="mx-auto mt-4 max-w-[42ch] text-[17px] leading-relaxed text-[#6e6e73]">
+              Same free build every time, straight from GitHub Releases.
             </p>
-            <a className="pill mt-10" href={DMG_URL}>
+            <a className="pill mt-8" href={DMG_URL}>
               Download Nest-1.0.1.dmg
             </a>
             <p className="mt-4 text-[13px] text-[#86868b]">
-              Served from GitHub Releases. Same file every time.{" "}
+              <a className="text-[#0071e3]" href="#install">
+                Install steps ↑
+              </a>
+              {" · "}
               <a className="text-[#0071e3]" href={RELEASES_URL}>
                 Past versions
               </a>
+              {" · "}
+              <a className="text-[#0071e3]" href={GITHUB_URL}>
+                Source on GitHub
+              </a>
             </p>
           </Reveal>
-
-          <ol className="mt-16 space-y-4 text-left">
-            {[
-              ["Open the disk image", "Double-click Nest-1.0.1.dmg. You’ll see Nest, a READ ME FIRST note, and an Applications shortcut."],
-              ["Drag Nest to Applications", "That’s the install. Keep the disk image mounted for the next step."],
-              [
-                "If macOS says “Nest” Not Opened",
-                "Don’t click Move to Bin. After dragging to Applications, double-click “Open Nest (First Time).command” in the disk image — or right-click Nest in Applications → Open → Open. System Settings → Privacy & Security → Open Anyway also works after one blocked attempt.",
-              ],
-              [
-                "Pick a folder",
-                "Downloads is the default. Any folder works. Nest classifies what’s already there, then watches for new files.",
-              ],
-              [
-                "Decide on AI",
-                "Say yes and Nest can install or start Ollama and pull a small local model for you. Say no and everything still works with on-device rules.",
-              ],
-            ].map(([t, d], i) => (
-              <li key={t} className="flex gap-5 rounded-[24px] bg-[#f5f5f7] p-6 md:p-8">
-                <span className="text-[13px] font-semibold text-[#86868b]">{String(i + 1).padStart(2, "0")}</span>
-                <div>
-                  <h3 className="text-[19px] font-semibold tracking-tight">{t}</h3>
-                  <p className="mt-2 text-[15px] leading-relaxed text-[#6e6e73]">{d}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
         </div>
       </section>
 
@@ -262,7 +311,11 @@ export default function HomePage() {
             ],
             [
               "Why does macOS say it can’t verify Nest?",
-              "Downloads are quarantined until you approve them once. Nest isn’t notarized yet (that needs a paid Apple Developer certificate). Use the First Time helper in the .dmg, or right-click → Open. Nest does not upload your files anywhere.",
+              "Downloads get a quarantine flag until you approve them once. Nest isn’t notarized yet (that’s a paid Apple Developer certificate — not a subscription we pass on to you). Run the two Terminal lines on the install section, use the First Time helper in the .dmg, or right-click → Open. Your files still never leave your Mac.",
+            ],
+            [
+              "Is Nest really free?",
+              "Yes. Open source on GitHub. No in-app purchases, no Nest account, no “Pro” folder. If someone asks you to pay for Nest, that’s not us — unless you’re buying them a coffee for organizing their Downloads.",
             ],
             [
               "What Mac do I need?",
@@ -308,6 +361,18 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function InstallStep({ n, title, body }: { n: string; title: string; body: string }) {
+  return (
+    <li className="flex gap-5 rounded-[24px] bg-[#f5f5f7] p-6 md:p-8">
+      <span className="shrink-0 text-[13px] font-semibold text-[#86868b]">{n}</span>
+      <div>
+        <h3 className="text-[19px] font-semibold tracking-tight">{title}</h3>
+        <p className="mt-2 text-[15px] leading-relaxed text-[#6e6e73]">{body}</p>
+      </div>
+    </li>
   );
 }
 
