@@ -129,6 +129,7 @@ final class AppState: ObservableObject {
             startMonitoring(folder: folder)
         }
         reclassifyLocallyClassifiedFiles()
+        removeStaleResearchReportExpiryRecords()
     }
 
     /// Explicit, user-initiated cleanup for records that don't belong under
@@ -178,6 +179,24 @@ final class AppState: ObservableObject {
             changed = true
         }
         if changed { store.saveFiles() }
+    }
+
+    /// Self-heal for a real bug: equity/analyst research reports were getting
+    /// fabricated personal expiry dates (a stock research report tagged
+    /// "Insurance expiring 2020" purely from the word "coverage" in "analyst
+    /// coverage"). Recomputing ExpiryContextClassifier's exclusion is cheap
+    /// and deterministic, so this only strips records that could never
+    /// legitimately exist under the current rules — and only ones the user
+    /// never touched (still active, never added to Calendar), the same
+    /// "never silently override a real user action" discipline as the file
+    /// reclassification self-heal above.
+    private func removeStaleResearchReportExpiryRecords() {
+        store.removeExpiryRecords { record in
+            guard record.userStatus == .active, record.calendarEventIdentifier == nil else { return false }
+            guard let file = store.fileRecords.first(where: { $0.id == record.documentID }) else { return false }
+            let combined = ((file.extractedText ?? "") + " " + (file.ocrText ?? "")).lowercased()
+            return TextMatching.containsAnyWord(combined, ExpiryContextClassifier.researchReportMarkers)
+        }
     }
 
     func makeAIService() -> AIService {

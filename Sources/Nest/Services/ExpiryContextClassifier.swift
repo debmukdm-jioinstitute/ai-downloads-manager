@@ -30,10 +30,16 @@ enum ExpiryContextClassifier {
         (["check-in", "check in", "departure", "flight date", "boarding", "event date", "appointment", "scheduled for", "travel date"], .eventDate, 0.75)
     ]
 
+    // "coverage" alone is too ambiguous to use as an insurance signal — it's
+    // also the standard term for "analyst coverage" of a stock in equity
+    // research (an "Analyst Coverage_ICICI Sec_Q4FY20.pdf" report got tagged
+    // Insurance purely from that word in its filename). Require it alongside
+    // an unambiguous insurance-specific word, or a compound phrase that only
+    // means insurance ("coverage amount", "policy coverage").
     private static let categoryKeywords: [(patterns: [String], category: String)] = [
         (["passport", "visa", "national id", "aadhaar", "identity card"], "Identity"),
         (["flight", "boarding", "itinerary", "hotel", "check-in", "check-out", "pnr", "e-ticket"], "Travel"),
-        (["policy", "insurance", "coverage", "premium", "sum insured"], "Insurance"),
+        (["policy", "insurance", "premium", "sum insured", "coverage amount", "policy coverage", "insurance coverage"], "Insurance"),
         (["subscription", "trial", "billing cycle", "auto-renew", "membership plan"], "Subscriptions"),
         (["contract", "agreement", "termination", "notice period"], "Contracts"),
         (["warranty", "guarantee period"], "Warranties"),
@@ -47,6 +53,21 @@ enum ExpiryContextClassifier {
         (["appointment", "meeting", "reservation"], "Appointments")
     ]
 
+    // Equity/analyst research reports routinely say "expiry" (F&O contract
+    // expiry, options expiry) and "coverage" (analyst coverage) as normal
+    // market vocabulary that has nothing to do with a personal document's
+    // validity — a real report ("Analyst Coverage_ICICI Sec_Q4FY20.pdf",
+    // containing "ICICI Securities Limited is the author and distributor of
+    // this report") produced a fabricated "Insurance expiring 2020" record
+    // this way. These documents don't have personal expiry dates to track at
+    // all, so the fix is to never run expiry detection on them rather than
+    // try to out-guess every ambiguous word they might contain.
+    static let researchReportMarkers = [
+        "is the author and distributor of this report", "equity research", "analyst coverage",
+        "initiating coverage", "institutional research", "research analyst", "target price",
+        "recommendation:", "sebi registration", "buy rating", "sell rating", "hold rating"
+    ]
+
     static func classify(filename: String, text: String, ocrText: String?, fromOCR: Bool = false) -> [ExpiryRecordDraft] {
         var drafts: [ExpiryRecordDraft] = []
         // A scanned image (passport photo, insurance card) has no extracted
@@ -55,6 +76,7 @@ enum ExpiryContextClassifier {
         // assume, or OCR-only documents silently never produce expiry records.
         let combined = text.isEmpty ? (ocrText ?? "") : text
         let fullLower = ((text) + " " + (ocrText ?? "")).lowercased()
+        guard !TextMatching.containsAnyWord(fullLower, researchReportMarkers) else { return [] }
         let category = category(forContext: fullLower, filename: filename)
         let recurrence = detectRecurrence(in: fullLower)
 

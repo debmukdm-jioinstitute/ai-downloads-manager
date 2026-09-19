@@ -65,6 +65,20 @@ final class LibraryStore: ObservableObject {
     /// anything that isn't a direct child of any currently-watched folder,
     /// plus any expiry records that pointed at it. Returns how many were
     /// removed.
+    /// Generic self-heal hook for expiry records that a fixed bug now says
+    /// should never have existed (e.g. a research report fabricated an
+    /// "Insurance" expiry). Only ever removes what the caller's predicate
+    /// selects — callers are expected to scope it to records the user never
+    /// touched, the same discipline as pruneFileRecords.
+    @discardableResult
+    func removeExpiryRecords(where predicate: (ExpiryRecord) -> Bool) -> Int {
+        let idsToRemove = Set(expiryRecords.filter(predicate).map(\.id))
+        guard !idsToRemove.isEmpty else { return 0 }
+        expiryRecords.removeAll { idsToRemove.contains($0.id) }
+        saveExpiryRecords()
+        return idsToRemove.count
+    }
+
     @discardableResult
     func pruneFileRecords(notDirectChildrenOfAny folders: [URL]) -> Int {
         let roots = Set(folders.map { $0.standardizedFileURL.path })
