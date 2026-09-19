@@ -159,9 +159,16 @@ struct ExpiryCenterView: View {
                 Text(record.date.formatted(date: .abbreviated, time: .omitted) + " · \(Int(record.confidence * 100))% confidence")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let file = appState.allFiles().first(where: { $0.id == record.documentID }) {
+                    Text(file.currentPath)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             Spacer()
-            Button("Confirm") { appState.setExpiryUserStatus(record, status: .active) }
+            Button("Confirm") { appState.confirmExpiryRecord(record) }
             Button("Correct") { selectedRecord = record }
             Button("Ignore") { appState.setExpiryUserStatus(record, status: .ignored) }
         }

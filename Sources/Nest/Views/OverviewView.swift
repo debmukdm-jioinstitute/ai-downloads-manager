@@ -188,6 +188,11 @@ struct FileRow: View {
                 Text("\(file.category)\(file.subcategory.map { " / \($0)" } ?? "")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text(file.currentPath)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
             Spacer()
             if let confidence = file.aiConfidence {
