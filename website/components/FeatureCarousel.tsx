@@ -1,6 +1,8 @@
 "use client";
 
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { springDrawer, springSnappy } from "@/lib/motion";
 
 const tiles = [
   {
@@ -44,6 +46,7 @@ const tiles = [
 export function FeatureCarousel() {
   const scroller = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     const el = scroller.current;
@@ -70,7 +73,7 @@ export function FeatureCarousel() {
   const go = (dir: number) => {
     const el = scroller.current;
     if (!el) return;
-    el.scrollBy({ left: dir * (el.clientWidth * 0.72), behavior: "smooth" });
+    el.scrollBy({ left: dir * (el.clientWidth * 0.72), behavior: reduced ? "auto" : "smooth" });
   };
 
   return (
@@ -88,35 +91,46 @@ export function FeatureCarousel() {
           ref={scroller}
           className="slider-track flex snap-x snap-mandatory gap-5 overflow-x-auto px-[max(1.5rem,calc((100%-980px)/2))] pb-4"
         >
-          {tiles.map((tile) => (
-            <article
+          {tiles.map((tile, i) => (
+            <motion.article
               key={tile.kicker}
               data-tile
-              className={`tile snap-center shrink-0 ${toneClass(tile.tone)}`}
+              className={`tile snap-center shrink-0 ${toneClass(tile.tone)} ${i === active ? "tile-active" : ""}`}
+              animate={{
+                scale: reduced ? 1 : i === active ? 1 : 0.96,
+                opacity: reduced ? 1 : i === active ? 1 : 0.72,
+              }}
+              transition={springSnappy}
+              whileHover={reduced ? undefined : { scale: i === active ? 1.01 : 0.98 }}
             >
               <p className="text-[12px] font-semibold tracking-[0.16em] uppercase opacity-70">{tile.kicker}</p>
               <h3 className="display mt-6 max-w-[12ch] text-[32px] md:text-[40px]">{tile.title}</h3>
               <p className="mt-5 max-w-[36ch] text-[17px] leading-relaxed opacity-80">{tile.copy}</p>
-            </article>
+            </motion.article>
           ))}
         </div>
 
         <div className="mx-auto mt-8 flex max-w-[980px] items-center justify-between px-6">
           <div className="flex gap-2">
             {tiles.map((t, i) => (
-              <span
+              <motion.span
                 key={t.kicker}
-                className={`h-1.5 rounded-full transition-all ${i === active ? "w-7 bg-[#1d1d1f]" : "w-1.5 bg-[#d2d2d7]"}`}
+                className="h-1.5 rounded-full bg-[#d2d2d7]"
+                animate={{
+                  width: i === active ? 28 : 6,
+                  backgroundColor: i === active ? "#1d1d1f" : "#d2d2d7",
+                }}
+                transition={springDrawer}
               />
             ))}
           </div>
           <div className="flex gap-2">
-            <button type="button" className="nav-fab" onClick={() => go(-1)} aria-label="Previous">
+            <motion.button type="button" className="nav-fab" onClick={() => go(-1)} aria-label="Previous" whileTap={{ scale: 0.92 }} transition={springSnappy}>
               ‹
-            </button>
-            <button type="button" className="nav-fab" onClick={() => go(1)} aria-label="Next">
+            </motion.button>
+            <motion.button type="button" className="nav-fab" onClick={() => go(1)} aria-label="Next" whileTap={{ scale: 0.92 }} transition={springSnappy}>
               ›
-            </button>
+            </motion.button>
           </div>
         </div>
       </div>

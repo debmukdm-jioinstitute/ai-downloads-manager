@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { motion, useInView, useReducedMotion } from "motion/react";
+import { useRef, type ReactNode } from "react";
+import { springSoft } from "@/lib/motion";
 
 export function Reveal({
   children,
@@ -12,31 +14,18 @@ export function Reveal({
   delay?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) {
-      el.classList.add("is-in");
-      return;
-    }
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          el.classList.add("is-in");
-          io.disconnect();
-        }
-      },
-      { threshold: 0.16, rootMargin: "0px 0px -8% 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
+  const reduced = useReducedMotion();
+  const inView = useInView(ref, { once: true, margin: "0px 0px -10% 0px", amount: 0.2 });
 
   return (
-    <div ref={ref} className={`reveal-io ${className}`} style={{ transitionDelay: `${delay}ms` }}>
+    <motion.div
+      ref={ref}
+      className={className}
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 32 }}
+      animate={inView ? (reduced ? { opacity: 1 } : { opacity: 1, y: 0 }) : undefined}
+      transition={{ ...springSoft, delay: delay / 1000 }}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }

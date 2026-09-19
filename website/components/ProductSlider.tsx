@@ -1,6 +1,8 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { springDrawer, springSnappy } from "@/lib/motion";
 
 const slides = [
   {
@@ -37,21 +39,38 @@ const slides = [
 
 export function ProductSlider() {
   const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(0);
   const hover = useRef(false);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      if (!hover.current) setIndex((i) => (i + 1) % slides.length);
+      if (!hover.current) {
+        setDirection(1);
+        setIndex((i) => (i + 1) % slides.length);
+      }
     }, 5200);
     return () => window.clearInterval(id);
   }, []);
 
   const slide = slides[index];
 
+  const pick = (i: number) => {
+    setDirection(i > index ? 1 : -1);
+    setIndex(i);
+  };
+
+  const slideVariants = {
+    enter: (d: number) =>
+      reduced ? { opacity: 0 } : { opacity: 0, y: d > 0 ? 20 : -20, filter: "blur(6px)" },
+    center: reduced ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" },
+    exit: (d: number) =>
+      reduced ? { opacity: 0 } : { opacity: 0, y: d > 0 ? -16 : 16, filter: "blur(4px)" },
+  };
+
   return (
     <section
-      id="gallery"
-      className="bg-white py-24 md:py-32"
+      className="bg-[#f5f5f7] py-24 md:py-32"
       onMouseEnter={() => {
         hover.current = true;
       }}
@@ -60,11 +79,23 @@ export function ProductSlider() {
       }}
     >
       <div className="mx-auto max-w-[980px] px-6">
-        <p className="eyebrow">A closer look</p>
-        <h2 className="display mt-3 max-w-[18ch] text-[40px] md:text-[56px]">{slide.title}</h2>
-        <p className="mt-5 max-w-[52ch] text-[19px] leading-relaxed text-[#6e6e73] md:text-[21px]">{slide.copy}</p>
+        <p className="eyebrow">Product tour</p>
+        <AnimatePresence mode="wait" custom={direction}>
+          <motion.div
+            key={slide.kicker + "-copy"}
+            custom={direction}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={springDrawer}
+          >
+            <h2 className="display mt-3 max-w-[18ch] text-[40px] md:text-[56px]">{slide.title}</h2>
+            <p className="mt-5 max-w-[52ch] text-[19px] leading-relaxed text-[#6e6e73] md:text-[21px]">{slide.copy}</p>
+          </motion.div>
+        </AnimatePresence>
 
-        <div className="mt-12 overflow-hidden rounded-[28px] mac-chrome">
+        <div className="mt-12 overflow-hidden rounded-[28px] mac-chrome mac-chrome-lift">
           <div className="flex items-center gap-2 px-4 py-3">
             <span className="dot traffic-red" />
             <span className="dot traffic-yellow" />
@@ -72,21 +103,37 @@ export function ProductSlider() {
             <span className="ml-3 text-[12px] text-[#6e6e73]">{slide.kicker}</span>
           </div>
           <div className="bg-[#f5f5f7] p-3 md:p-5">
-            <MacScene scene={slide.scene} />
+            <AnimatePresence mode="wait" custom={direction}>
+              <motion.div
+                key={slide.scene}
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={springDrawer}
+              >
+                <MacScene scene={slide.scene} />
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
           {slides.map((s, i) => (
-            <button
+            <motion.button
               key={s.kicker}
-              onClick={() => setIndex(i)}
-              className={`rounded-full px-4 py-2 text-[13px] transition ${
-                i === index ? "bg-[#1d1d1f] text-white" : "bg-[#e8e8ed] text-[#1d1d1f] hover:bg-[#d2d2d7]"
+              type="button"
+              onClick={() => pick(i)}
+              className={`rounded-full px-4 py-2 text-[13px] ${
+                i === index ? "bg-[#1d1d1f] text-white" : "bg-[#e8e8ed] text-[#1d1d1f]"
               }`}
+              whileHover={reduced ? undefined : { scale: 1.03 }}
+              whileTap={{ scale: 0.96 }}
+              transition={springSnappy}
             >
               {s.kicker}
-            </button>
+            </motion.button>
           ))}
         </div>
       </div>
@@ -109,7 +156,7 @@ function MacScene({ scene }: { scene: (typeof slides)[number]["scene"] }) {
           return (
             <div
               key={item}
-              className={`rounded-lg px-3 py-1.5 text-[13px] ${active ? "bg-[#0071e3] text-white" : "text-[#1d1d1f]/80"}`}
+              className={`rounded-lg px-3 py-1.5 text-[13px] transition-colors duration-300 ${active ? "bg-[#0071e3] text-white" : "text-[#1d1d1f]/80"}`}
             >
               {item}
             </div>
@@ -158,9 +205,7 @@ function OverviewScene() {
 function SearchScene() {
   return (
     <div>
-      <div className="rounded-full bg-[#f5f5f7] px-4 py-3 text-[15px] text-[#1d1d1f]">
-        invoice from Amazon last month
-      </div>
+      <div className="rounded-full bg-[#f5f5f7] px-4 py-3 text-[15px] text-[#1d1d1f]">invoice from Amazon last month</div>
       <div className="mt-6 space-y-2">
         <Row name="Amazon_Invoice_Aug.pdf" meta="Finance · Invoice · ₹4,299" strong />
         <Row name="Amazon_Order_8821.pdf" meta="Finance · Receipt" />
@@ -190,7 +235,7 @@ function VoiceScene() {
   return (
     <div className="flex h-full min-h-[280px] flex-col items-center justify-center text-center">
       <div className="relative grid h-24 w-24 place-items-center rounded-full bg-[#0071e3]/10">
-        <div className="absolute inset-0 animate-ping rounded-full bg-[#0071e3]/10" />
+        <div className="absolute inset-0 animate-ping rounded-full bg-[#0071e3]/10 motion-reduce:animate-none" />
         <div className="h-16 w-16 rounded-full bg-[#0071e3] shadow-lg shadow-[#0071e3]/30" />
       </div>
       <p className="mt-8 text-[20px] font-semibold tracking-tight">Listening…</p>

@@ -1,9 +1,39 @@
+import { FaqList } from "@/components/FaqList";
 import { FeatureCarousel } from "@/components/FeatureCarousel";
+import { HeroItem, HeroStagger } from "@/components/HeroStagger";
+import { HeroParallax } from "@/components/HeroParallax";
 import { Nav, Logo } from "@/components/Nav";
 import { ProductSlider } from "@/components/ProductSlider";
 import { Reveal } from "@/components/Reveal";
 import { INSTALL_TERMINAL_LINES, TerminalCommands } from "@/components/TerminalCommands";
 import { DMG_URL, GITHUB_URL, RELEASES_URL } from "@/lib/links";
+
+const faqItems = [
+  {
+    q: "Does Nest move my files by itself?",
+    a: "No. It classifies in the background. Organization happens in Rules when you review groups and apply. Every move is logged and can be undone.",
+  },
+  {
+    q: "Do I need the internet or an account?",
+    a: "No account. No Nest servers. Local classification and search work offline. Optional AI needs Ollama running locally. Optional voice uses on-device recognition.",
+  },
+  {
+    q: "Why does macOS say it can’t verify Nest?",
+    a: `Downloads get a quarantine flag until you approve them once. Paste in Terminal: ${INSTALL_TERMINAL_LINES[0]} then ${INSTALL_TERMINAL_LINES[1]}. (Or use the copy button at the top of the page.) Nest isn’t notarized yet — that’s Apple’s paid certificate, not a fee we charge you. Your files still never leave your Mac.`,
+  },
+  {
+    q: "Is Nest really free?",
+    a: "Yes. Open source on GitHub. No in-app purchases, no Nest account, no “Pro” folder. If someone asks you to pay for Nest, that’s not us — unless you’re buying them a coffee for organizing their Downloads.",
+  },
+  {
+    q: "What Mac do I need?",
+    a: "Apple Silicon (M1 or later) and macOS 14 Sonoma or later. Intel Macs are not in this build.",
+  },
+  {
+    q: "Can I use Nest without AI or a microphone?",
+    a: "Yes. AI and Talk to Nest are off until you enable them in Settings. The watcher, categories, search, duplicates, and Expiry Center still run.",
+  },
+];
 
 const fileKinds = [
   "Invoices",
@@ -26,45 +56,55 @@ export default function HomePage() {
       <Nav />
 
       <section className="hero-mesh relative overflow-hidden pt-28 pb-16 md:pt-36 md:pb-24">
+        <div className="hero-aurora" aria-hidden />
         <div className="mx-auto max-w-[980px] px-6 text-center">
-          <p className="reveal eyebrow">Nest for Mac</p>
-          <h1 className="display reveal delay-1 mx-auto mt-4 max-w-[14ch] text-[52px] md:text-[84px]">
-            Your Downloads, understood.
-          </h1>
-          <p className="reveal delay-2 mx-auto mt-6 max-w-[40ch] text-[19px] leading-relaxed text-[#6e6e73] md:text-[21px]">
-            Nest watches the folder that fills up fastest, works out what each file actually is, and finds it when you ask — in English, or out loud.
-          </p>
-          <div className="reveal delay-3 mt-8 flex flex-wrap items-center justify-center gap-4">
-            <a className="pill" href={DMG_URL}>
-              Download for Mac
-            </a>
-            <a className="pill-ghost" href="#install">
-              How to install →
-            </a>
-          </div>
-          <p className="reveal delay-4 mt-4 text-[12px] text-[#86868b]">
-            Apple Silicon · macOS 14 Sonoma or later · Free &amp; open source
-          </p>
-
-          <div className="reveal delay-4 hero-terminal-card px-6">
-            <p className="text-[13px] font-semibold tracking-tight text-[#1d1d1f]">
-              After you drag Nest to Applications — paste this in Terminal
-            </p>
-            <p className="mt-2 text-[14px] leading-relaxed text-[#6e6e73]">
-              macOS may say &ldquo;Nest Not Opened.&rdquo; We&apos;re open source, not sketchy — just not App Store–notarized
-              yet. Two commands, zero subscription fees:
-            </p>
-            <TerminalCommands id="hero-terminal" />
-          </div>
+          <HeroStagger>
+            <HeroItem>
+              <p className="eyebrow">Nest for Mac</p>
+            </HeroItem>
+            <HeroItem>
+              <h1 className="display mx-auto mt-4 max-w-[14ch] text-[52px] md:text-[84px]">Your Downloads, understood.</h1>
+            </HeroItem>
+            <HeroItem>
+              <p className="body-large mx-auto mt-6 max-w-[40ch] text-[#6e6e73]">
+                Nest watches the folder that fills up fastest, works out what each file actually is, and finds it when you ask — in English, or out loud.
+              </p>
+            </HeroItem>
+            <HeroItem>
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+                <a className="pill" href={DMG_URL}>
+                  Download for Mac
+                </a>
+                <a className="pill-ghost" href="#install">
+                  How to install →
+                </a>
+              </div>
+            </HeroItem>
+            <HeroItem>
+              <p className="mt-4 text-[12px] text-[#86868b]">
+                Apple Silicon · macOS 14 Sonoma or later · Free &amp; open source
+              </p>
+            </HeroItem>
+            <HeroItem>
+              <div className="hero-terminal-card material-card px-6">
+                <p className="text-[13px] font-semibold tracking-tight text-[#1d1d1f]">
+                  After you drag Nest to Applications — paste this in Terminal
+                </p>
+                <p className="mt-2 text-[14px] leading-relaxed text-[#6e6e73]">
+                  macOS may say &ldquo;Nest Not Opened.&rdquo; We&apos;re open source, not sketchy — just not App Store–notarized yet. Two
+                  commands, zero subscription fees:
+                </p>
+                <TerminalCommands id="hero-terminal" />
+              </div>
+            </HeroItem>
+          </HeroStagger>
         </div>
 
-        <div className="relative mx-auto mt-16 max-w-[1100px] px-6">
-          <div className="reveal delay-4">
-            <HeroWindow />
-          </div>
+        <HeroParallax>
+          <HeroWindow />
           <FloatingChip className="float-b right-[-12px] top-[6%] hidden md:block" title="Passport" sub="Expires 2027" />
           <FloatingChip className="float-c right-[-8px] bottom-[10%] hidden lg:block" title="Hey Nest" sub="Voice ready" />
-        </div>
+        </HeroParallax>
       </section>
 
       <section id="install" className="border-y border-black/5 bg-white py-20 md:py-28">
@@ -302,43 +342,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="faq bg-[#f5f5f7] py-24">
+      <section className="bg-[#f5f5f7] py-24">
         <div className="mx-auto max-w-[820px] px-6">
-          <h2 className="display text-[36px] md:text-[44px]">Questions, answered.</h2>
-          {[
-            [
-              "Does Nest move my files by itself?",
-              "No. It classifies in the background. Organization happens in Rules when you review groups and apply. Every move is logged and can be undone.",
-            ],
-            [
-              "Do I need the internet or an account?",
-              "No account. No Nest servers. Local classification and search work offline. Optional AI needs Ollama running locally. Optional voice uses on-device recognition.",
-            ],
-            [
-              "Why does macOS say it can’t verify Nest?",
-              `Downloads get a quarantine flag until you approve them once. Paste in Terminal: ${INSTALL_TERMINAL_LINES[0]} then ${INSTALL_TERMINAL_LINES[1]}. (Or use the copy button at the top of the page.) Nest isn’t notarized yet — that’s Apple’s paid certificate, not a fee we charge you. Your files still never leave your Mac.`,
-            ],
-            [
-              "Is Nest really free?",
-              "Yes. Open source on GitHub. No in-app purchases, no Nest account, no “Pro” folder. If someone asks you to pay for Nest, that’s not us — unless you’re buying them a coffee for organizing their Downloads.",
-            ],
-            [
-              "What Mac do I need?",
-              "Apple Silicon (M1 or later) and macOS 14 Sonoma or later. Intel Macs are not in this build.",
-            ],
-            [
-              "Can I use Nest without AI or a microphone?",
-              "Yes. AI and Talk to Nest are off until you enable them in Settings. The watcher, categories, search, duplicates, and Expiry Center still run.",
-            ],
-          ].map(([q, a]) => (
-            <details key={q} className="py-5">
-              <summary className="flex items-center justify-between gap-6 text-[19px] font-semibold tracking-tight">
-                {q}
-                <span className="text-[#86868b]">+</span>
-              </summary>
-              <p className="mt-3 max-w-[60ch] text-[16px] leading-relaxed text-[#6e6e73]">{a}</p>
-            </details>
-          ))}
+          <Reveal>
+            <h2 className="display text-[36px] md:text-[44px]">Questions, answered.</h2>
+          </Reveal>
+          <FaqList items={faqItems} />
         </div>
       </section>
 
@@ -383,7 +392,7 @@ function InstallStep({ n, title, body }: { n: string; title: string; body: strin
 
 function FeatureCard({ n, title, body }: { n: string; title: string; body: string }) {
   return (
-    <article className="h-full rounded-[28px] bg-white p-8 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+    <article className="glass-card h-full rounded-[28px] p-8">
       <p className="text-[13px] font-semibold text-[#0071e3]">{n}</p>
       <h3 className="mt-4 text-[22px] font-semibold tracking-tight">{title}</h3>
       <p className="mt-3 text-[15px] leading-relaxed text-[#6e6e73]">{body}</p>

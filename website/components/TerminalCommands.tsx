@@ -1,6 +1,8 @@
 "use client";
 
+import { motion } from "motion/react";
 import { useState } from "react";
+import { springSnappy } from "@/lib/motion";
 
 export const INSTALL_TERMINAL_LINES = [
   "xattr -dr com.apple.quarantine /Applications/Nest.app",
@@ -25,9 +27,15 @@ export function TerminalCommands({ id }: { id?: string }) {
     <div className="install-terminal-wrap">
       <div className="install-terminal-header">
         <span className="text-[12px] font-medium text-[#a1a1a6]">Terminal</span>
-        <button type="button" className="install-terminal-copy" onClick={copy}>
+        <motion.button
+          type="button"
+          className="install-terminal-copy"
+          onClick={copy}
+          whileTap={{ scale: 0.96 }}
+          transition={springSnappy}
+        >
           {copied ? "Copied" : "Copy both lines"}
-        </button>
+        </motion.button>
       </div>
       <pre id={id} className="install-terminal" tabIndex={0}>
         <code>

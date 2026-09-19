@@ -1,45 +1,50 @@
 "use client";
 
 import { DMG_URL } from "@/lib/links";
+import { motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { springSnappy } from "@/lib/motion";
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
+    const onScroll = () => setScrolled(window.scrollY > 6);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
-    <header className={`fixed inset-x-0 top-0 z-50 ${scrolled ? "nav-blur" : "bg-transparent"}`}>
+    <header className={`nav-shell fixed inset-x-0 top-0 z-50 ${scrolled ? "nav-blur is-scrolled" : ""}`}>
+      <div className="nav-edge-fade" aria-hidden />
       <div className="mx-auto flex h-12 max-w-[980px] items-center justify-between px-6 text-[12px] md:h-[44px]">
-        <a href="#top" className="flex items-center gap-2 font-semibold tracking-tight">
+        <a href="#top" className="nav-brand flex items-center gap-2 font-semibold tracking-tight">
           <Logo />
           Nest
         </a>
         <nav className="hidden items-center gap-7 text-[12px] text-[#1d1d1f]/80 md:flex">
-          <a href="#understand" className="hover:text-black">
-            Understand
-          </a>
-          <a href="#gallery" className="hover:text-black">
-            Gallery
-          </a>
-          <a href="#search" className="hover:text-black">
-            Search
-          </a>
-          <a href="#privacy" className="hover:text-black">
-            Privacy
-          </a>
-          <a href="#install" className="hover:text-black">
-            Install
-          </a>
+          {[
+            ["#understand", "Understand"],
+            ["#gallery", "Gallery"],
+            ["#search", "Search"],
+            ["#privacy", "Privacy"],
+            ["#install", "Install"],
+          ].map(([href, label]) => (
+            <a key={href} href={href} className="nav-link">
+              {label}
+            </a>
+          ))}
         </nav>
-        <a href={DMG_URL} className="rounded-full bg-[#0071e3] px-3 py-[5px] text-[12px] text-white hover:bg-[#0077ed]">
+        <motion.a
+          href={DMG_URL}
+          className="nav-download rounded-full bg-[#0071e3] px-3 py-[5px] text-[12px] text-white"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.96 }}
+          transition={springSnappy}
+        >
           Download
-        </a>
+        </motion.a>
       </div>
     </header>
   );
