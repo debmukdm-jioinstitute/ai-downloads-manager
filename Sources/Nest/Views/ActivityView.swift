@@ -33,6 +33,7 @@ struct ActivityView: View {
         case .duplicate: return "doc.on.doc.fill"
         case .moved: return "arrow.right.circle"
         case .renamed: return "pencil.circle"
+        case .deleted: return "trash"
         case .undone: return "arrow.uturn.backward.circle"
         case .error: return "exclamationmark.triangle"
         case .aiDisabled: return "sparkles.slash"
@@ -42,7 +43,7 @@ struct ActivityView: View {
 
     private func color(for kind: ActivityKind) -> Color {
         switch kind {
-        case .error: return .red
+        case .error, .deleted: return .red
         case .duplicate: return .orange
         default: return .secondary
         }

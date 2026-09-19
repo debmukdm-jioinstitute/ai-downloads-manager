@@ -70,7 +70,7 @@ struct MainWindowView: View {
             }
         } detail: {
             if let selectedFile {
-                FilePreviewPane(file: selectedFile)
+                FilePreviewPane(file: selectedFile, onDeleted: { self.selectedFile = nil })
             } else {
                 ContentUnavailableView("No File Selected", systemImage: "doc", description: Text("Select a file to see details."))
             }

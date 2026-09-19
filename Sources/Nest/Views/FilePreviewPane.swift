@@ -5,6 +5,7 @@ import AppKit
 struct FilePreviewPane: View {
     @EnvironmentObject var appState: AppState
     let file: FileRecord
+    var onDeleted: (() -> Void)? = nil
     @State private var thumbnail: NSImage?
     @State private var showingRename = false
     @State private var newName = ""
@@ -15,6 +16,7 @@ struct FilePreviewPane: View {
     @State private var question = ""
     @State private var aiAnswer: String?
     @State private var errorMessage: String?
+    @State private var showingDeleteConfirm = false
 
     var body: some View {
         ScrollView {
@@ -77,6 +79,7 @@ struct FilePreviewPane: View {
                     }
                     Button("Ask AI") { showingAskAI = true }
                         .disabled(!appState.aiEnabled)
+                    Button("Delete", role: .destructive) { showingDeleteConfirm = true }
                 }
 
                 if let aiAnswer {
@@ -97,6 +100,23 @@ struct FilePreviewPane: View {
         }
         .sheet(isPresented: $showingAskAI) {
             askAISheet
+        }
+        .confirmationDialog(
+            "Delete \(file.filename)?",
+            isPresented: $showingDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                do {
+                    try appState.organizer()?.delete(file)
+                    onDeleted?()
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This moves the file at \(file.currentPath) to the Trash. You can restore it from there if needed.")
         }
         .task { await loadThumbnail() }
     }

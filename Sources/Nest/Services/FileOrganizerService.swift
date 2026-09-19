@@ -60,6 +60,29 @@ final class FileOrganizerService {
         try performMove(record, to: destination, reason: "Moved to \(destination.path)")
     }
 
+    /// Deletes the file at its current on-disk location by moving it to the
+    /// Trash (recoverable there, same as deleting in Finder) and drops its
+    /// entry — and any expiry records tied to it — from the library index.
+    @discardableResult
+    func delete(_ record: FileRecord) throws -> OperationRecord {
+        let fm = FileManager.default
+        let sourceURL = URL(fileURLWithPath: record.currentPath)
+        guard fm.fileExists(atPath: sourceURL.path) else { throw FileOrganizerError.sourceMissing }
+
+        var trashedURL: NSURL?
+        do {
+            try fm.trashItem(at: sourceURL, resultingItemURL: &trashedURL)
+        } catch {
+            throw FileOrganizerError.moveFailed(error.localizedDescription)
+        }
+
+        let op = OperationRecord(kind: .delete, fileRecordID: record.id, fromPath: sourceURL.path, toPath: (trashedURL as URL?)?.path ?? "", reason: "Deleted (moved to Trash)")
+        store.insertOperation(op)
+        store.insertActivity(ActivityEvent(kind: .deleted, message: "Deleted (moved to Trash)", filename: record.filename))
+        store.removeFile(record)
+        return op
+    }
+
     private func performMove(_ record: FileRecord, to destDir: URL, reason: String) throws -> OperationRecord {
         let fm = FileManager.default
         let sourceURL = URL(fileURLWithPath: record.currentPath)

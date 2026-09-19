@@ -3,10 +3,13 @@ import Foundation
 enum OperationKind: String, Codable {
     case move
     case rename
+    case delete
 }
 
 /// Records every file-system mutation the app performs so it can be shown in
-/// Activity and undone. Nothing here ever deletes a file.
+/// Activity and undone. Nothing here ever deletes a file except an explicit,
+/// user-confirmed delete — and even that moves the file to the Trash rather
+/// than removing it outright, so it stays recoverable.
 final class OperationRecord: Codable, Identifiable {
     let id: UUID
     var kind: OperationKind

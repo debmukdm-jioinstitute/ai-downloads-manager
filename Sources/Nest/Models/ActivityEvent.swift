@@ -7,6 +7,7 @@ enum ActivityKind: String, Codable {
     case duplicate
     case moved
     case renamed
+    case deleted
     case undone
     case error
     case aiDisabled
