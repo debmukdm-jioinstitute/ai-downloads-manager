@@ -253,6 +253,40 @@ body {
   background: #28c840;
 }
 
+.life-photo-frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #e8e8ed;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 24px 60px -20px rgba(0, 0, 0, 0.22);
+}
+
+.life-photo-frame.portrait {
+  aspect-ratio: 3 / 4;
+}
+
+.life-photo-frame.wide {
+  aspect-ratio: 21 / 9;
+}
+
+.life-photo-caption {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 20px 22px 22px;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.72) 68%);
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .life-photo-caption {
+    padding: 28px 32px 32px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reveal,
   .reveal-io,
