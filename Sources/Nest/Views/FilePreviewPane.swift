@@ -17,6 +17,9 @@ struct FilePreviewPane: View {
     @State private var aiAnswer: String?
     @State private var errorMessage: String?
     @State private var showingDeleteConfirm = false
+    @State private var showingTweakAppliedName = false
+    @State private var appliedName = ""
+    @State private var tweakedName = ""
 
     var body: some View {
         ScrollView {
@@ -41,6 +44,10 @@ struct FilePreviewPane: View {
                         .buttonStyle(.plain)
                         .help("Close")
                     }
+                }
+
+                if let suggestion = FilenameSuggestionEngine.suggest(for: file), suggestion != file.filename {
+                    suggestedNameRow(suggestion)
                 }
 
                 infoRow("Size", ByteCountFormatter.string(fromByteCount: file.fileSize, countStyle: .file))
@@ -111,6 +118,9 @@ struct FilePreviewPane: View {
         .sheet(isPresented: $showingAskAI) {
             askAISheet
         }
+        .sheet(isPresented: $showingTweakAppliedName) {
+            tweakAppliedNameSheet
+        }
         .confirmationDialog(
             "Delete \(file.filename)?",
             isPresented: $showingDeleteConfirm,
@@ -151,6 +161,72 @@ struct FilePreviewPane: View {
     private func handleMissingSource() {
         appState.removeMissingFile(file)
         onClose?()
+    }
+
+    /// The recommended filename (see FilenameSuggestionEngine), shown right
+    /// under the current one — the "dropdown" is a single-option Picker
+    /// rather than a plain label since that's the requested affordance, even
+    /// though only one name is ever proposed per file today. Bound to a
+    /// getter/setter reading the suggestion directly instead of a separate
+    /// @State, so there's no per-file-switch sync to forget (the same class
+    /// of stale-state bug just fixed for the thumbnail above).
+    private func suggestedNameRow(_ suggestion: String) -> some View {
+        HStack {
+            Image(systemName: "sparkles").foregroundStyle(.secondary)
+            Text("AI suggests:").font(.caption).foregroundStyle(.secondary)
+            Picker("", selection: Binding(get: { suggestion }, set: { _ in })) {
+                Text(suggestion).tag(suggestion)
+            }
+            .labelsHidden()
+            .frame(maxWidth: 240)
+            Spacer()
+            Button("Apply Changes") { applySuggestedName(suggestion) }
+        }
+    }
+
+    private func applySuggestedName(_ suggestion: String) {
+        do {
+            try appState.organizer()?.rename(file, to: suggestion)
+        } catch FileOrganizerError.sourceMissing {
+            handleMissingSource()
+            return
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        // rename() sanitizes and de-duplicates the requested name, so what
+        // actually landed on disk (file.filename, now updated) may differ
+        // slightly from the raw suggestion — that's what gets offered for
+        // one more tweak, not the pre-sanitized string.
+        appliedName = file.filename
+        tweakedName = appliedName
+        showingTweakAppliedName = true
+    }
+
+    private var tweakAppliedNameSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Name Applied").bold()
+            Text("Renamed to \u{201C}\(appliedName)\u{201D}. Want to tweak the wording or extension before confirming?")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            TextField("Filename", text: $tweakedName)
+            HStack {
+                Spacer()
+                Button("Confirm") {
+                    if tweakedName != appliedName {
+                        do {
+                            try appState.organizer()?.rename(file, to: tweakedName)
+                        } catch FileOrganizerError.sourceMissing {
+                            handleMissingSource()
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
+                    }
+                    showingTweakAppliedName = false
+                }.buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20).frame(width: 380)
     }
 
     private func infoRow(_ label: String, _ value: String) -> some View {
