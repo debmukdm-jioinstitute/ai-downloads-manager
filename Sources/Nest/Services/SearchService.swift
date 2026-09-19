@@ -77,17 +77,42 @@ enum SearchService {
             // Stage 4: tags.
             for tag in file.tags where relates(tag, to: lowerQuery, words: queryWords) { score += 10 }
 
-            // Stage 5: AI-derived structured filters, applied as hard constraints when present.
+            // Stage 5: AI-derived structured filters.
+            //
+            // category/vendor/documentType/keywords are the AI's own
+            // classification *guess* for whatever free text it couldn't
+            // otherwise place — proven unreliable on a real query ("ENEL"),
+            // where the local model forced a category guess (the prompt
+            // requires one of a fixed enum) that didn't match the file's
+            // real category, and the resulting hard `continue` filtered out
+            // every file in the library, including one with the word right
+            // in its filename. They now only ever add confidence on a match
+            // and never veto a file that already has real local evidence.
+            //
+            // date/amount/currency stay hard constraints: they only appear
+            // in aiFilters when the query itself contained something
+            // date-or-number-shaped, which a small model has no real
+            // temptation to hallucinate for a query that doesn't.
+            //
+            // But this same small model also doesn't reliably follow "omit
+            // fields you cannot infer" — measured on this exact query, it
+            // filled the *entire* schema anyway: amountMin/amountMax as 0,
+            // currency/vendor/dates as "". Those decode as present-but-empty,
+            // not nil, so every string field is treated as unset when empty
+            // and both amount bounds are ignored at 0 (a real lower bound of
+            // exactly $0 has nothing to constrain; a real upper bound of $0
+            // would exclude everything, which is never what "search" means).
             if let filters = aiFilters {
-                if let cat = filters.category, cat.caseInsensitiveCompare(file.category) != .orderedSame { continue }
-                if let vendor = filters.vendor, file.detectedVendor?.localizedCaseInsensitiveContains(vendor) != true { continue }
-                if let docType = filters.documentType, file.detectedDocumentType?.localizedCaseInsensitiveContains(docType) != true { continue }
-                if let currency = filters.currency, file.detectedCurrency?.caseInsensitiveCompare(currency) != .orderedSame { continue }
-                if let minAmt = filters.amountMin, (file.detectedAmount ?? -1) < minAmt { continue }
-                if let maxAmt = filters.amountMax, (file.detectedAmount ?? .greatestFiniteMagnitude) > maxAmt { continue }
+                if let cat = filters.category, !cat.isEmpty, cat.caseInsensitiveCompare(file.category) == .orderedSame { score += 20 }
+                if let vendor = filters.vendor, !vendor.isEmpty, file.detectedVendor?.localizedCaseInsensitiveContains(vendor) == true { score += 20 }
+                if let docType = filters.documentType, !docType.isEmpty, file.detectedDocumentType?.localizedCaseInsensitiveContains(docType) == true { score += 15 }
+                for keyword in filters.keywords ?? [] where !keyword.isEmpty && (relates(keyword, to: lowerQuery, words: queryWords) || lowerFilename.contains(keyword.lowercased())) { score += 5 }
+
+                if let currency = filters.currency, !currency.isEmpty, file.detectedCurrency?.caseInsensitiveCompare(currency) != .orderedSame { continue }
+                if let minAmt = filters.amountMin, minAmt > 0, (file.detectedAmount ?? -1) < minAmt { continue }
+                if let maxAmt = filters.amountMax, maxAmt > 0, (file.detectedAmount ?? .greatestFiniteMagnitude) > maxAmt { continue }
                 if let dateFrom = parseDate(filters.dateFrom), let fileDate = file.detectedDate ?? file.dateDownloaded as Date?, fileDate < dateFrom { continue }
                 if let dateTo = parseDate(filters.dateTo), let fileDate = file.detectedDate ?? file.dateDownloaded as Date?, fileDate > dateTo { continue }
-                score += 50
             }
 
             if score > 0 { scored.append((file, score)) }

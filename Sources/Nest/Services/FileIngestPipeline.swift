@@ -164,6 +164,13 @@ final class FileIngestPipeline {
                 var ocr: String?
                 if OCRService.imageExtensions.contains(ext) {
                     ocr = OCRService.recognizeText(imageURL: url)
+                } else if ext == "pdf" && (text?.isEmpty ?? true) {
+                    // A scanned/photographed PDF has no text layer at all —
+                    // PDFKit returns nil for every page — so it would
+                    // otherwise never be searchable or classifiable by
+                    // content, only by filename. Rasterize and OCR it the
+                    // same way a plain image file already is.
+                    ocr = OCRService.recognizeText(scannedPDFURL: url)
                 }
                 return .success(hash: hash, text: text, ocr: ocr)
             }

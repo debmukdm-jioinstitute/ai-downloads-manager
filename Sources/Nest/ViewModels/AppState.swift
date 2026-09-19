@@ -139,6 +139,7 @@ final class AppState: ObservableObject {
         reclassifyLocallyClassifiedFiles()
         removeStaleResearchReportExpiryRecords()
         Task { await upgradeStaleExpiryDetections() }
+        Task { await backfillScannedPDFText() }
     }
 
     /// Explicit, user-initiated cleanup for records that don't belong under
@@ -238,6 +239,61 @@ final class AppState: ObservableObject {
             await expiryPipeline.detectAndStore(for: file)
         }
         await rescheduleExpiryNotifications()
+    }
+
+    /// Backfill for a real gap: a scanned/photographed PDF has no text
+    /// layer at all (PDFKit's `page.string` returns nil for every page), so
+    /// before OCRService gained PDF rasterization it was invisible to both
+    /// search and classification — findable only by filename. One-time and
+    /// off the main actor (Vision OCR across several PDFs would otherwise
+    /// visibly stall the UI); scoped to PDFs that still have neither
+    /// extracted nor OCR text and that the user hasn't already
+    /// corrected/approved, the same discipline as the reclassification
+    /// self-heal above.
+    private func backfillScannedPDFText() async {
+        let migrationKey = "pdfOCRBackfillV1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        UserDefaults.standard.set(true, forKey: migrationKey)
+
+        let candidates = store.fileRecords.filter {
+            $0.fileExtension.lowercased() == "pdf" &&
+            !$0.userApprovedClassification &&
+            ($0.extractedText?.isEmpty ?? true) &&
+            ($0.ocrText?.isEmpty ?? true)
+        }
+        guard !candidates.isEmpty else { return }
+
+        var changed = false
+        for record in candidates {
+            let path = record.currentPath
+            guard FileManager.default.fileExists(atPath: path) else { continue }
+            let url = URL(fileURLWithPath: path)
+            guard let ocrText = await Task.detached(priority: .utility, operation: {
+                OCRService.recognizeText(scannedPDFURL: url)
+            }).value else { continue }
+
+            record.ocrText = ocrText
+            SearchService.invalidateCache(for: record)
+
+            let local = ClassificationEngine.classify(
+                filename: record.filename,
+                fileExtension: record.fileExtension,
+                extractedText: record.extractedText,
+                ocrText: record.ocrText
+            )
+            record.category = local.category
+            record.subcategory = local.subcategory
+            record.tags = local.tags
+            record.detectedVendor = local.vendor
+            record.detectedDocumentType = local.documentType
+            record.detectedAmount = local.amount
+            record.detectedCurrency = local.currency
+            record.aiConfidence = local.confidence
+            record.classificationReason = local.reason
+            record.processingStatus = local.confidence < CategoryTaxonomy.reviewConfidenceThreshold ? .needsReview : .processed
+            changed = true
+        }
+        if changed { store.saveFiles() }
     }
 
     private func removeStaleResearchReportExpiryRecords() {
