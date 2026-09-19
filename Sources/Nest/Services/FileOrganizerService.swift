@@ -39,13 +39,31 @@ final class FileOrganizerService {
         guard CategoryTaxonomy.isValid(category: category, subcategory: subcategory) else {
             throw FileOrganizerError.invalidCategory(category, subcategory)
         }
-        let fm = FileManager.default
-        let sourceURL = URL(fileURLWithPath: record.currentPath)
-        guard fm.fileExists(atPath: sourceURL.path) else { throw FileOrganizerError.sourceMissing }
-
         let rootFolder = URL(fileURLWithPath: record.originalPath).deletingLastPathComponent()
         var destDir = rootFolder.appendingPathComponent(category, isDirectory: true)
         if let subcategory { destDir.appendPathComponent(subcategory, isDirectory: true) }
+
+        let op = try performMove(record, to: destDir, reason: "Moved to \(category)\(subcategory.map { "/\($0)" } ?? "")")
+        record.category = category
+        record.subcategory = subcategory
+        store.saveFiles()
+        return op
+    }
+
+    /// Moves a file to an arbitrary destination the user picked directly —
+    /// e.g. a folder in iCloud Drive — rather than a category/subcategory
+    /// beneath its watched root. Category/subcategory are left as-is; only
+    /// the file's physical location changes. The destination doesn't need
+    /// to be inside any watched folder.
+    @discardableResult
+    func moveToFolder(_ record: FileRecord, destination: URL) throws -> OperationRecord {
+        try performMove(record, to: destination, reason: "Moved to \(destination.path)")
+    }
+
+    private func performMove(_ record: FileRecord, to destDir: URL, reason: String) throws -> OperationRecord {
+        let fm = FileManager.default
+        let sourceURL = URL(fileURLWithPath: record.currentPath)
+        guard fm.fileExists(atPath: sourceURL.path) else { throw FileOrganizerError.sourceMissing }
 
         do {
             try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
@@ -62,16 +80,14 @@ final class FileOrganizerService {
             throw FileOrganizerError.moveFailed(error.localizedDescription)
         }
 
-        let op = OperationRecord(kind: .move, fileRecordID: record.id, fromPath: sourceURL.path, toPath: destURL.path, reason: "Moved to \(category)\(subcategory.map { "/\($0)" } ?? "")")
+        let op = OperationRecord(kind: .move, fileRecordID: record.id, fromPath: sourceURL.path, toPath: destURL.path, reason: reason)
         store.insertOperation(op)
 
         record.currentPath = destURL.path
         record.filename = uniqueName
-        record.category = category
-        record.subcategory = subcategory
         record.userApprovedClassification = true
 
-        store.insertActivity(ActivityEvent(kind: .moved, message: "Moved to \(category)\(subcategory.map { "/\($0)" } ?? "")", filename: uniqueName))
+        store.insertActivity(ActivityEvent(kind: .moved, message: reason, filename: uniqueName))
         store.saveFiles()
         return op
     }

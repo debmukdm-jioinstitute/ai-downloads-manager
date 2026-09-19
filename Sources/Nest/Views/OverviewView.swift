@@ -22,7 +22,7 @@ struct OverviewView: View {
                         appState.selectedSidebarSection = .categories
                     }
                     statCard(value: "\(stats.suggestedActions)", label: "Suggested Actions", icon: "sparkles") {
-                        appState.selectedSidebarSection = .rules
+                        appState.selectedSidebarSection = .categories
                     }
                     // Storage Used has nowhere meaningful to navigate to, so it
                     // stays a plain info card rather than faking clickability.

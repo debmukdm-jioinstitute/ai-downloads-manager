@@ -158,8 +158,32 @@ struct FilePreviewPane: View {
                     showingMove = false
                 }.buttonStyle(.borderedProminent)
             }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Or move it to a specific folder — anywhere on this Mac, including iCloud Drive.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Choose Folder…") { moveToCustomFolder() }
+            }
         }
         .padding(20).frame(width: 360)
+    }
+
+    private func moveToCustomFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose a destination folder for \(file.filename)"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        do {
+            try appState.organizer()?.moveToFolder(file, destination: destination)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        showingMove = false
     }
 
     private var askAISheet: some View {
