@@ -6,12 +6,43 @@ struct OverviewView: View {
     @Binding var selectedFile: FileRecord?
     @State private var refreshToken = UUID()
     @State private var selectedExpiryRecord: ExpiryRecord?
+    @State private var searchQuery = ""
+    @State private var searchResults: [(file: FileRecord, confidence: Int)] = []
+    @State private var isSearching = false
+    @State private var searchNotice: String?
+
+    private var isSearchActive: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Downloads Overview")
                     .font(.title2.bold())
+
+                universalSearchBar
+
+                if isSearchActive {
+                    searchResultsSection
+                } else {
+                    dashboardContent
+                }
+            }
+            .padding(24)
+        }
+        .navigationTitle("Overview")
+        .sheet(item: $selectedExpiryRecord) { record in
+            ExpiryDetailView(record: record)
+        }
+    }
+
+    /// Everything the Overview page shows when no search is active — the
+    /// stat cards, watched folders, attention list, and its own local
+    /// Needs Review preview. Pulled out so the search bar above can swap it
+    /// out for `searchResultsSection` without duplicating this whole block.
+    private var dashboardContent: some View {
+        Group {
 
                 let stats = appState.dashboardStats()
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
@@ -67,12 +98,89 @@ struct OverviewView: View {
                             .onTapGesture { selectedFile = file }
                     }
                 }
-            }
-            .padding(24)
         }
-        .navigationTitle("Overview")
-        .sheet(item: $selectedExpiryRecord) { record in
-            ExpiryDetailView(record: record)
+    }
+
+    private var universalSearchBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "sparkle.magnifyingglass")
+                TextField("Ask in plain language — try \"inflation\", \"tax invoices\"...", text: $searchQuery)
+                    .textFieldStyle(.plain)
+                    .onSubmit(runSearch)
+                if isSearching {
+                    ProgressView().controlSize(.small)
+                }
+                if isSearchActive {
+                    Button {
+                        searchQuery = ""
+                        searchResults = []
+                        searchNotice = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+
+            if let searchNotice {
+                Text(searchNotice).font(.caption).foregroundStyle(.orange)
+            }
+        }
+        .onChange(of: searchQuery) { _, newValue in
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                searchResults = []
+                searchNotice = nil
+            }
+        }
+    }
+
+    private var searchResultsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Results for \u{201C}\(searchQuery)\u{201D} (\(searchResults.count))")
+                .font(.headline)
+            if searchResults.isEmpty {
+                Text(isSearching ? "Searching…" : "No files matched. Try a different word or phrase.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(searchResults, id: \.file.id) { result in
+                    FileRow(file: result.file, matchConfidence: result.confidence)
+                        .onTapGesture { selectedFile = result.file }
+                }
+            }
+        }
+    }
+
+    private func runSearch() {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            searchResults = []
+            return
+        }
+        isSearching = true
+        searchNotice = nil
+        Task {
+            var filters: AISearchFilters?
+            if appState.aiEnabled {
+                do {
+                    filters = try await appState.makeAIService().interpretSearchQuery(trimmed)
+                } catch {
+                    await MainActor.run {
+                        searchNotice = "AI couldn't interpret the query; showing local text-match results instead."
+                    }
+                }
+            }
+            let scored = SearchService.searchScored(query: trimmed, in: appState.allFiles(), aiFilters: filters)
+            let maxScore = scored.map(\.score).max() ?? 0
+            let withConfidence = scored.map { entry in
+                (file: entry.file, confidence: maxScore > 0 ? Int((Double(entry.score) / Double(maxScore) * 100).rounded()) : 0)
+            }
+            await MainActor.run {
+                searchResults = withConfidence
+                isSearching = false
+            }
         }
     }
 
@@ -177,6 +285,10 @@ private struct WatchedFolderRow: View {
 
 struct FileRow: View {
     let file: FileRecord
+    /// When set (e.g. from a search result's relevance score), shown instead
+    /// of the file's own classification confidence — the two numbers answer
+    /// different questions and showing both would just be confusing.
+    var matchConfidence: Int? = nil
     @State private var isHovering = false
 
     var body: some View {
@@ -195,7 +307,11 @@ struct FileRow: View {
                     .truncationMode(.middle)
             }
             Spacer()
-            if let confidence = file.aiConfidence {
+            if let matchConfidence {
+                Text("\(matchConfidence)% match")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if let confidence = file.aiConfidence {
                 Text("\(Int(confidence * 100))%")
                     .font(.caption)
                     .foregroundStyle(.secondary)

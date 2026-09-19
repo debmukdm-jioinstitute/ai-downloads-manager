@@ -25,8 +25,15 @@ enum SearchService {
     private static var textCache: [ObjectIdentifier: (text: [UInt8], ocr: [UInt8], summary: [UInt8])] = [:]
 
     static func search(query: String, in files: [FileRecord], aiFilters: AISearchFilters?) -> [FileRecord] {
+        searchScored(query: query, in: files, aiFilters: aiFilters).map(\.file)
+    }
+
+    /// Same ranking as `search`, but keeps each match's raw relevance score
+    /// so callers can show a confidence figure (e.g. normalized against the
+    /// top score in the result set) instead of just an ordered list.
+    static func searchScored(query: String, in files: [FileRecord], aiFilters: AISearchFilters?) -> [(file: FileRecord, score: Int)] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return files }
+        guard !trimmed.isEmpty else { return files.map { ($0, 0) } }
         let lowerQuery = trimmed.lowercased()
         let queryWords = lowerQuery.split(separator: " ").map(String.init).filter { $0.count > 2 }
         let queryPhraseBytes = asciiLowerBytes(lowerQuery)
@@ -86,7 +93,7 @@ enum SearchService {
             if score > 0 { scored.append((file, score)) }
         }
 
-        return scored.sorted { $0.1 > $1.1 }.map { $0.0 }
+        return scored.sorted { $0.1 > $1.1 }
     }
 
     /// Call after a file's extracted/OCR/summary text is (re)written, so a
