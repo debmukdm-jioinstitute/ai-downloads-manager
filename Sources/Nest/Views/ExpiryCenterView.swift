@@ -168,14 +168,19 @@ struct ExpiryCenterView: View {
                         .truncationMode(.middle)
                 }
             }
+            // Tap target is scoped to this text block only, not the whole
+            // row — a `.onTapGesture` spanning the Buttons below it can
+            // swallow their clicks on macOS, which was silently eating
+            // "Confirm" (the button's own action never fired even though it
+            // looked clicked, so the record never left this list).
+            .contentShape(Rectangle())
+            .onTapGesture { selectFile(for: record) }
             Spacer()
             Button("Confirm") { appState.confirmExpiryRecord(record) }
             Button("Correct") { selectedRecord = record }
             Button("Ignore") { appState.setExpiryUserStatus(record, status: .ignored) }
         }
         .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture { selectFile(for: record) }
     }
 
     /// Shows the underlying document's own details/preview in the main
@@ -221,6 +226,8 @@ struct ExpiryCenterView: View {
                 Text(record.title)
                 Text(record.eventType.displayName).font(.caption).foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
+            .onTapGesture { selectFile(for: record) }
             Spacer()
             if days < 0 {
                 Text("Expired \(-days) day\(-days == 1 ? "" : "s") ago").font(.caption).foregroundStyle(.red)
@@ -241,7 +248,5 @@ struct ExpiryCenterView: View {
             .help("Edit date or add to Calendar")
         }
         .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture { selectFile(for: record) }
     }
 }

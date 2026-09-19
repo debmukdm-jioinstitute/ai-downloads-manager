@@ -130,7 +130,13 @@ struct FilePreviewPane: View {
         } message: {
             Text("This moves the file at \(file.currentPath) to the Trash. You can restore it from there if needed.")
         }
-        .task {
+        // Keyed on the file's id: a plain `.task { }` only ever runs once per
+        // view *slot*, not per `file` value — this pane stays in the same
+        // slot in the detail column across selections, so without the id it
+        // kept showing the first file's thumbnail forever while every other
+        // field correctly updated to match the new selection.
+        .task(id: file.id) {
+            thumbnail = nil
             guard FileManager.default.fileExists(atPath: file.currentPath) else {
                 handleMissingSource()
                 return
