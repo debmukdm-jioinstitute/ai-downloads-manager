@@ -39,7 +39,12 @@ struct OllamaAIService: AIService {
     // MARK: - Public API
 
     func classifyFile(filename: String, extractedText: String?) async throws -> AIClassificationResult {
-        let content = String((extractedText ?? "").prefix(6000))
+        // Classification signal (document type, vendor, amount, dates) is
+        // almost always in the opening of a document — invoices, receipts,
+        // letters, and academic papers all front-load it. Sending the full
+        // 6000 chars was pure prefill cost with no accuracy benefit; on an
+        // 8GB M1 that prefill, not the model, was most of the latency.
+        let content = String((extractedText ?? "").prefix(1500))
         let system = Self.classificationSystemPrompt
         let user = """
         Filename: \(filename)
@@ -47,7 +52,7 @@ struct OllamaAIService: AIService {
         Extracted content (may be empty for non-text files):
         \(content.isEmpty ? "(no extractable text)" : content)
         """
-        let raw = try await send(system: system, user: user)
+        let raw = try await send(system: system, user: user, jsonMode: true, maxOutputTokens: 300)
         if let parsed = Self.parseClassification(raw) {
             return parsed
         }
@@ -56,7 +61,7 @@ struct OllamaAIService: AIService {
         Previous response:
         \(raw)
         """
-        let retryRaw = try await send(system: system, user: user + "\n\n" + correction)
+        let retryRaw = try await send(system: system, user: user + "\n\n" + correction, jsonMode: true, maxOutputTokens: 300)
         guard let retryParsed = Self.parseClassification(retryRaw) else {
             throw AIServiceError.invalidResponse
         }
@@ -67,7 +72,7 @@ struct OllamaAIService: AIService {
         let content = String(extractedText.prefix(8000))
         let system = "You summarize documents in 1-2 concise sentences. Reply with plain text only, no preamble."
         let user = "Filename: \(filename)\n\nContent:\n\(content)"
-        return try await send(system: system, user: user).trimmingCharacters(in: .whitespacesAndNewlines)
+        return try await send(system: system, user: user, maxOutputTokens: 80).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func suggestFilename(filename: String, classification: AIClassificationResult) async throws -> String {
@@ -82,7 +87,7 @@ struct OllamaAIService: AIService {
         Date: \(classification.documentDate ?? "unknown")
         Amount: \(classification.amount.map { String($0) } ?? "unknown") \(classification.currency ?? "")
         """
-        let raw = try await send(system: system, user: user)
+        let raw = try await send(system: system, user: user, maxOutputTokens: 40)
         return FilenameSanitizer.sanitize(raw.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
@@ -95,7 +100,7 @@ struct OllamaAIService: AIService {
         Omit fields you cannot infer. Reply with ONLY the JSON object.
         Today's date is \(Self.todayString()).
         """
-        let raw = try await send(system: system, user: query)
+        let raw = try await send(system: system, user: query, jsonMode: true, maxOutputTokens: 250)
         guard let json = Self.extractJSON(raw), let data = json.data(using: .utf8),
               let filters = try? JSONDecoder().decode(AISearchFilters.self, from: data) else {
             throw AIServiceError.invalidResponse
@@ -106,17 +111,17 @@ struct OllamaAIService: AIService {
     func answer(question: String, context: String) async throws -> String {
         let system = "Answer the user's question about this specific document using only the provided context. If the answer isn't in the context, say so briefly."
         let user = "Context:\n\(String(context.prefix(8000)))\n\nQuestion: \(question)"
-        return try await send(system: system, user: user).trimmingCharacters(in: .whitespacesAndNewlines)
+        return try await send(system: system, user: user, maxOutputTokens: 300).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func extractDocumentEvents(filename: String, extractedText: String) async throws -> AIDocumentEventsResult {
-        let content = String(extractedText.prefix(6000))
-        let raw = try await send(system: Self.documentEventsSystemPrompt, user: "Filename: \(filename)\n\nExtracted content:\n\(content)")
+        let content = String(extractedText.prefix(3000))
+        let raw = try await send(system: Self.documentEventsSystemPrompt, user: "Filename: \(filename)\n\nExtracted content:\n\(content)", jsonMode: true, maxOutputTokens: 400)
         if let parsed = Self.parseDocumentEvents(raw) {
             return parsed
         }
         let correction = "Your previous response was not valid JSON matching the schema. Reply with ONLY the JSON object.\nPrevious response:\n\(raw)"
-        let retry = try await send(system: Self.documentEventsSystemPrompt, user: "Filename: \(filename)\n\nExtracted content:\n\(content)\n\n\(correction)")
+        let retry = try await send(system: Self.documentEventsSystemPrompt, user: "Filename: \(filename)\n\nExtracted content:\n\(content)\n\n\(correction)", jsonMode: true, maxOutputTokens: 400)
         guard let retryParsed = Self.parseDocumentEvents(retry) else {
             throw AIServiceError.invalidResponse
         }
@@ -125,13 +130,13 @@ struct OllamaAIService: AIService {
 
     // MARK: - Networking
 
-    private func send(system: String, user: String) async throws -> String {
+    private func send(system: String, user: String, jsonMode: Bool = false, maxOutputTokens: Int? = nil) async throws -> String {
         var request = URLRequest(url: try chatEndpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 120
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model,
             "stream": false,
             "messages": [
@@ -139,6 +144,20 @@ struct OllamaAIService: AIService {
                 ["role": "user", "content": user]
             ]
         ]
+        // Constrained JSON decoding is both faster (no wandering into prose
+        // that then needs a costly retry round-trip) and more reliable than
+        // asking nicely in the prompt.
+        if jsonMode {
+            body["format"] = "json"
+        }
+        // num_ctx caps how much KV-cache memory Ollama reserves per request —
+        // on an 8GB machine, an oversized default context is real memory
+        // pressure that slows every request, not just long ones.
+        var options: [String: Any] = ["num_ctx": 2048]
+        if let maxOutputTokens {
+            options["num_predict"] = maxOutputTokens
+        }
+        body["options"] = options
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response): (Data, URLResponse)

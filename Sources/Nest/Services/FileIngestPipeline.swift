@@ -110,9 +110,17 @@ final class FileIngestPipeline {
         let local = ClassificationEngine.classify(filename: name, fileExtension: ext, extractedText: record.extractedText, ocrText: record.ocrText)
         applyLocal(local, to: record)
 
-        if aiEnabledProvider(), let textForAI = record.extractedText ?? record.ocrText, !textForAI.isEmpty {
+        // Only escalate to the local LLM when local classification is genuinely
+        // unsure — a real bulk rescan with AI enabled was measured at ~90s per
+        // file (llama3.2:1b generating a full classification per document,
+        // strictly sequentially), which made a ~300-file backlog look hung
+        // when it was really just going to take hours. Most files are already
+        // confidently classified by fast, free heuristics; AI only earns its
+        // cost on the ones those heuristics couldn't place.
+        if aiEnabledProvider(), local.confidence < CategoryTaxonomy.reviewConfidenceThreshold,
+           let textForAI = record.extractedText ?? record.ocrText, !textForAI.isEmpty {
             do {
-                let ai = try await aiServiceProvider().classifyFile(filename: name, extractedText: textForAI)
+                let ai = try await Self.classifyWithTimeout(aiService: aiServiceProvider(), filename: name, extractedText: textForAI)
                 applyAI(ai, to: record)
             } catch {
                 // Local classification already applied; just log why AI didn't improve on it.
@@ -162,6 +170,31 @@ final class FileIngestPipeline {
                 return .timedOut
             }
             let result = await group.next() ?? .timedOut
+            group.cancelAll()
+            return result
+        }
+    }
+
+    nonisolated private static let aiTimeoutSeconds: UInt64 = 45
+
+    private struct AITimeoutError: LocalizedError {
+        var errorDescription: String? { "AI classification timed out after \(FileIngestPipeline.aiTimeoutSeconds)s" }
+    }
+
+    /// A hung or unreachable Ollama server would otherwise block this file
+    /// (and every file after it, since ingestion is sequential) forever —
+    /// same class of bug as the hash/extract/OCR hang above, just further
+    /// down the pipeline.
+    nonisolated private static func classifyWithTimeout(aiService: AIService, filename: String, extractedText: String) async throws -> AIClassificationResult {
+        try await withThrowingTaskGroup(of: AIClassificationResult.self) { group in
+            group.addTask {
+                try await aiService.classifyFile(filename: filename, extractedText: extractedText)
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: aiTimeoutSeconds * 1_000_000_000)
+                throw AITimeoutError()
+            }
+            let result = try await group.next()!
             group.cancelAll()
             return result
         }

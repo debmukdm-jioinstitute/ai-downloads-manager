@@ -73,7 +73,15 @@ final class AppState: ObservableObject {
         self.aiEnabled = UserDefaults.standard.bool(forKey: "aiEnabled")
         self.hasSeenAIConsent = UserDefaults.standard.bool(forKey: "hasSeenAIConsent")
         self.ollamaHost = UserDefaults.standard.string(forKey: "ollamaHost") ?? "http://localhost:11434"
-        self.ollamaModel = UserDefaults.standard.string(forKey: "ollamaModel") ?? "llama3.2:1b"
+        // Qwen2.5 1.5B (Apache-2.0): measured on this machine (M1, 8GB) at
+        // roughly 2x llama3.2:1b's tokens/sec even though it has more
+        // parameters — Qwen2.5's architecture is just more efficient here.
+        // Tried qwen2.5:0.5b first since it's smaller still, but at that size
+        // it degenerated into a repeating loop and produced invalid JSON on
+        // real documents, which costs a full retry round-trip (or fails
+        // outright) — a bad trade for a small extra speedup. 1.5B was
+        // reliable across every test run.
+        self.ollamaModel = UserDefaults.standard.string(forKey: "ollamaModel") ?? "qwen2.5:1.5b"
         self.expiryUrgencyWindows = ExpiryUrgencyWindows.loadFromDefaults()
         if let savedOffsets = UserDefaults.standard.array(forKey: "notifyOffsetDays") as? [Int] {
             self.notifyOffsetDays = Set(savedOffsets)
