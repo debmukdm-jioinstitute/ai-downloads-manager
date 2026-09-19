@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Nest</string>
+    <key>CFBundleDisplayName</key>
+    <string>Nest</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.nest.app</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>Nest</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Nest listens for "Hey Nest" and the Command+Option hotkey so you can search your files by voice.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Nest transcribes your voice on-device to turn what you say into a search — nothing is sent off your Mac.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Nest can add a reminder to your Calendar for a document's expiry or deadline, only when you tap "Add Reminder".</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Nest can add a reminder to your Calendar for a document's expiry or deadline, only when you tap "Add Reminder".</string>
+</dict>
+</plist>
