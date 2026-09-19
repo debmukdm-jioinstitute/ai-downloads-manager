@@ -209,7 +209,7 @@ export default function HomePage() {
               A single .dmg. Drag to Applications. Built for Apple Silicon Macs running macOS 14 or later.
             </p>
             <a className="pill mt-10" href={DMG_URL}>
-              Download Nest-1.0.dmg
+              Download Nest-1.0.1.dmg
             </a>
             <p className="mt-4 text-[13px] text-[#86868b]">
               Served from GitHub Releases. Same file every time.{" "}
@@ -221,11 +221,11 @@ export default function HomePage() {
 
           <ol className="mt-16 space-y-4 text-left">
             {[
-              ["Open the disk image", "Double-click Nest-1.0.dmg. You’ll see Nest beside an Applications shortcut."],
-              ["Drag Nest to Applications", "That’s the install. Eject the disk image when you’re done."],
+              ["Open the disk image", "Double-click Nest-1.0.1.dmg. You’ll see Nest, a READ ME FIRST note, and an Applications shortcut."],
+              ["Drag Nest to Applications", "That’s the install. Keep the disk image mounted for the next step."],
               [
-                "Open it the first time",
-                "This build isn’t notarized (no paid Apple Developer certificate). Right-click Nest in Applications, choose Open, then confirm Open. You only do this once.",
+                "If macOS says “Nest” Not Opened",
+                "Don’t click Move to Bin. After dragging to Applications, double-click “Open Nest (First Time).command” in the disk image — or right-click Nest in Applications → Open → Open. System Settings → Privacy & Security → Open Anyway also works after one blocked attempt.",
               ],
               [
                 "Pick a folder",
@@ -261,8 +261,8 @@ export default function HomePage() {
               "No account. No Nest servers. Local classification and search work offline. Optional AI needs Ollama running locally. Optional voice uses on-device recognition.",
             ],
             [
-              "Why does macOS warn me on first open?",
-              "The current download isn’t notarized. That’s a signing cost, not a sandbox bypass. Right-click → Open → Open once. After that, Nest launches normally.",
+              "Why does macOS say it can’t verify Nest?",
+              "Downloads are quarantined until you approve them once. Nest isn’t notarized yet (that needs a paid Apple Developer certificate). Use the First Time helper in the .dmg, or right-click → Open. Nest does not upload your files anywhere.",
             ],
             [
               "What Mac do I need?",

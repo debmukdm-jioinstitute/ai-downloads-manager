@@ -35,16 +35,23 @@ everything stays on your machine either way.
 
 ## Download
 
-**[Download Nest for Mac (.dmg)](https://github.com/debmukdm-jioinstitute/nest/releases/latest/download/Nest-1.0.dmg)**
+**[Download Nest for Mac (.dmg)](https://github.com/debmukdm-jioinstitute/nest/releases/latest/download/Nest-1.0.1.dmg)**
 — for Apple Silicon Macs (M1 and later) running macOS 14 (Sonoma) or later.
 
-Open the `.dmg` and drag **Nest** into the **Applications** shortcut in the
-same window. This build isn't notarized (no paid Apple Developer certificate
-is involved in producing it), so the first time you open it macOS will warn
-that it's from an unidentified developer — right-click (Control-click) **Nest**
-in Applications, choose **Open**, then confirm **Open** in the dialog. You
-only need to do this once. See the [releases page](https://github.com/debmukdm-jioinstitute/nest/releases)
-for past versions and full notes.
+Open the `.dmg` and drag **Nest** into **Applications**. If macOS shows
+**“Nest” Not Opened** or **could not verify**, do **not** click Move to Bin.
+
+**Easiest:** double-click **`Open Nest (First Time).command`** in the disk image
+(after copying Nest to Applications).
+
+**Or:** right-click (Control-click) **Nest** in Applications → **Open** → **Open**.
+
+**Or:** System Settings → **Privacy & Security** → **Open Anyway** (after one
+blocked launch).
+
+This build isn't notarized yet (requires a paid Apple Developer certificate for
+automatic Gatekeeper approval). See [releases](https://github.com/debmukdm-jioinstitute/nest/releases)
+for past versions.
 
 ---
 
