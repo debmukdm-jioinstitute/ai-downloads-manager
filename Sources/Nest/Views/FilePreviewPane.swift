@@ -5,7 +5,7 @@ import AppKit
 struct FilePreviewPane: View {
     @EnvironmentObject var appState: AppState
     let file: FileRecord
-    var onDeleted: (() -> Void)? = nil
+    var onClose: (() -> Void)? = nil
     @State private var thumbnail: NSImage?
     @State private var showingRename = false
     @State private var newName = ""
@@ -30,6 +30,16 @@ struct FilePreviewPane: View {
                     VStack(alignment: .leading) {
                         Text(file.filename).font(.headline)
                         Text(file.currentPath).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                    if let onClose {
+                        Spacer()
+                        Button { onClose() } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Close")
                     }
                 }
 
@@ -109,7 +119,7 @@ struct FilePreviewPane: View {
             Button("Delete", role: .destructive) {
                 do {
                     try appState.organizer()?.delete(file)
-                    onDeleted?()
+                    onClose?()
                 } catch {
                     errorMessage = error.localizedDescription
                 }
