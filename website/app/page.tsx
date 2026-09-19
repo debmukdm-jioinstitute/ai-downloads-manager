@@ -1,17 +1,8 @@
-import Image from "next/image";
 import { FeatureCarousel } from "@/components/FeatureCarousel";
-import { LifePhoto } from "@/components/LifePhoto";
 import { Nav, Logo } from "@/components/Nav";
-import {
-  PeopleMosaic,
-  PeoplePrivacyStrip,
-  PeopleStoriesIntro,
-  PeopleStoryBand,
-} from "@/components/PeopleStories";
 import { ProductSlider } from "@/components/ProductSlider";
 import { Reveal } from "@/components/Reveal";
 import { DMG_URL, GITHUB_URL, RELEASES_URL } from "@/lib/links";
-import { lifeScenes } from "@/lib/lifeScenes";
 
 const fileKinds = [
   "Invoices",
@@ -76,8 +67,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <PeopleStoriesIntro />
-
       <section id="understand" className="py-24 md:py-32">
         <div className="mx-auto max-w-[980px] px-6">
           <Reveal>
@@ -88,7 +77,6 @@ export default function HomePage() {
             <Reveal delay={40}>
               <FeatureCard
                 n="01"
-                image={lifeScenes[0]}
                 title="A watcher that waits until the file is real."
                 body="The moment a download finishes, Nest reads it — text, metadata, even OCR on images — and names what it is. Partial downloads are ignored until they settle."
               />
@@ -96,7 +84,6 @@ export default function HomePage() {
             <Reveal delay={120}>
               <FeatureCard
                 n="02"
-                image={lifeScenes[2]}
                 title="Intelligence that knows a flight from an expiry."
                 body="Nest hunts for dates that matter: passport expiry, policy renewal, payment deadline. A boarding date stays an event. Ambiguous finds wait in Needs Review."
               />
@@ -104,7 +91,6 @@ export default function HomePage() {
             <Reveal delay={200}>
               <FeatureCard
                 n="03"
-                image={lifeScenes[3]}
                 title="An assistant that never leaves your Mac."
                 body="Type, or speak. Nest answers from what it already knows. Local rules work with zero setup. Optional AI runs through Ollama on your machine — never uploaded."
               />
@@ -116,40 +102,22 @@ export default function HomePage() {
       <FeatureCarousel />
       <ProductSlider />
 
-      <PeopleStoryBand
-        sceneIndex={1}
-        kicker="Search"
-        title="Ask like you’d ask a colleague."
-        body="Freelancers and founders don’t file things twice. Nest turns “GST invoice from last quarter” into ranked results across filenames, extracted text, and tags — in English or Hinglish."
-      />
-
       <section id="search" className="bg-[#f5f5f7] py-24 md:py-32">
         <div className="mx-auto grid max-w-[980px] items-center gap-16 px-6 md:grid-cols-2">
-          <Reveal delay={120}>
-            <LifePhoto
-              src={lifeScenes[3].src}
-              alt={lifeScenes[3].alt}
-              caption={lifeScenes[3].caption}
-              task={lifeScenes[3].task}
-              aspect="portrait"
-              sizes="(max-width: 768px) 100vw, 480px"
-            />
-          </Reveal>
           <Reveal>
-            <p className="eyebrow">Voice &amp; type</p>
+            <p className="eyebrow">Search</p>
             <h2 className="display mt-3 text-[40px] md:text-[52px]">Stop remembering filenames.</h2>
             <p className="mt-5 text-[19px] leading-relaxed text-[#6e6e73]">
-              Ask for the invoice from Amazon. The presentation from yesterday. Insurance documents. Nest ranks across
-              names, extracted text, OCR, tags, and metadata.
+              Ask for the invoice from Amazon. The presentation from yesterday. Insurance documents. Nest ranks across names, extracted text, OCR, tags, and metadata.
             </p>
-            <div className="mt-8">
-              <QuoteStack />
-            </div>
             <ul className="mt-8 space-y-3 text-[17px] text-[#1d1d1f]">
               <li>Natural language, not filters first.</li>
               <li>Optional AI turns “over ₹10,000 last month” into real constraints.</li>
               <li>Voice: hold ⌘⌥ anywhere, or enable “Hey Nest.”</li>
             </ul>
+          </Reveal>
+          <Reveal delay={120}>
+            <QuoteStack />
           </Reveal>
         </div>
       </section>
@@ -181,14 +149,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <PeopleStoryBand
-        sceneIndex={2}
-        reverse
-        kicker="Expiry Center"
-        title="The dates buried in PDFs — surfaced with care."
-        body="Passport scans, policy renewals, fee deadlines. Nest reads the document, shows the source line, and lets you confirm before anything hits your calendar."
-      />
-
       <section id="privacy" className="dark-band py-24 md:py-32">
         <div className="mx-auto max-w-[980px] px-6">
           <Reveal>
@@ -210,11 +170,8 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-          <PeoplePrivacyStrip />
         </div>
       </section>
-
-      <PeopleMosaic />
 
       <section className="bg-[#f5f5f7] py-24 md:py-32">
         <div className="mx-auto max-w-[980px] px-6">
@@ -245,18 +202,6 @@ export default function HomePage() {
 
       <section id="install" className="bg-white py-24 md:py-32">
         <div className="mx-auto max-w-[820px] px-6 text-center">
-          <Reveal delay={60}>
-            <div className="mx-auto mb-14 max-w-[720px]">
-              <LifePhoto
-                src={lifeScenes[5].src}
-                alt={lifeScenes[5].alt}
-                caption={lifeScenes[5].caption}
-                task="When the household shares one Mac, Nest keeps every download legible — and every move reversible."
-                aspect="wide"
-                sizes="(max-width: 768px) 100vw, 720px"
-              />
-            </div>
-          </Reveal>
           <Reveal>
             <p className="eyebrow">Download</p>
             <h2 className="display mt-3 text-[40px] md:text-[56px]">Get Nest.</h2>
@@ -366,29 +311,12 @@ export default function HomePage() {
   );
 }
 
-function FeatureCard({
-  n,
-  title,
-  body,
-  image,
-}: {
-  n: string;
-  title: string;
-  body: string;
-  image?: { src: string; alt: string };
-}) {
+function FeatureCard({ n, title, body }: { n: string; title: string; body: string }) {
   return (
-    <article className="h-full overflow-hidden rounded-[28px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-      {image && (
-        <div className="relative h-44 w-full overflow-hidden">
-          <Image src={image.src} alt={image.alt} fill className="object-cover" sizes="(max-width: 768px) 100vw, 320px" />
-        </div>
-      )}
-      <div className="p-8">
+    <article className="h-full rounded-[28px] bg-white p-8 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <p className="text-[13px] font-semibold text-[#0071e3]">{n}</p>
       <h3 className="mt-4 text-[22px] font-semibold tracking-tight">{title}</h3>
       <p className="mt-3 text-[15px] leading-relaxed text-[#6e6e73]">{body}</p>
-      </div>
     </article>
   );
 }
