@@ -140,6 +140,9 @@ final class FileIngestPipeline {
     }
 
     nonisolated private static let perFileTimeoutSeconds: UInt64 = 20
+    nonisolated private static let textExtractableExtensions: Set<String> = [
+        "pdf", "txt", "csv", "rtf", "rtfd", "doc", "docx", "odt", "wordml", "xlsx", "pptx"
+    ]
 
     private enum ContentResult {
         case success(hash: String?, text: String?, ocr: String?)
@@ -158,7 +161,7 @@ final class FileIngestPipeline {
             group.addTask {
                 let hash = HashService.sha256(ofFileAt: url)
                 var text: String?
-                if ext == "pdf" || ext == "txt" || ext == "csv" || ext == "rtf" {
+                if Self.textExtractableExtensions.contains(ext) {
                     text = TextExtractionService.extractText(fileURL: url, utType: utType, fileExtension: ext)
                 }
                 var ocr: String?

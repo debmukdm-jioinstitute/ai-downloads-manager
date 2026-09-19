@@ -140,6 +140,7 @@ final class AppState: ObservableObject {
         removeStaleResearchReportExpiryRecords()
         Task { await upgradeStaleExpiryDetections() }
         Task { await backfillScannedPDFText() }
+        Task { await backfillOfficeDocumentText() }
     }
 
     /// Explicit, user-initiated cleanup for records that don't belong under
@@ -273,27 +274,71 @@ final class AppState: ObservableObject {
             }).value else { continue }
 
             record.ocrText = ocrText
-            SearchService.invalidateCache(for: record)
-
-            let local = ClassificationEngine.classify(
-                filename: record.filename,
-                fileExtension: record.fileExtension,
-                extractedText: record.extractedText,
-                ocrText: record.ocrText
-            )
-            record.category = local.category
-            record.subcategory = local.subcategory
-            record.tags = local.tags
-            record.detectedVendor = local.vendor
-            record.detectedDocumentType = local.documentType
-            record.detectedAmount = local.amount
-            record.detectedCurrency = local.currency
-            record.aiConfidence = local.confidence
-            record.classificationReason = local.reason
-            record.processingStatus = local.confidence < CategoryTaxonomy.reviewConfidenceThreshold ? .needsReview : .processed
+            reclassifyLocally(record)
             changed = true
         }
         if changed { store.saveFiles() }
+    }
+
+    /// Backfill sibling to the PDF-OCR one above, for the same reason: Word/
+    /// Excel/PowerPoint (and rtf/rtfd/odt/wordml) support was added to
+    /// TextExtractionService after these files were already indexed with no
+    /// text at all, and a plain "Rescan" never re-reads an unchanged file
+    /// (`FileIngestPipeline.ingest` skips anything whose size/mtime match its
+    /// existing record) — so without this they'd stay invisible to search
+    /// forever. `textutil`/`unzip` subprocesses are blocking I/O, hence the
+    /// same off-main-actor + one-time-migration treatment.
+    private func backfillOfficeDocumentText() async {
+        let migrationKey = "officeDocTextBackfillV1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        UserDefaults.standard.set(true, forKey: migrationKey)
+
+        let officeExtensions: Set<String> = ["rtf", "rtfd", "doc", "docx", "odt", "wordml", "xlsx", "pptx"]
+        let candidates = store.fileRecords.filter {
+            officeExtensions.contains($0.fileExtension.lowercased()) &&
+            !$0.userApprovedClassification &&
+            ($0.extractedText?.isEmpty ?? true)
+        }
+        guard !candidates.isEmpty else { return }
+
+        var changed = false
+        for record in candidates {
+            let path = record.currentPath
+            guard FileManager.default.fileExists(atPath: path) else { continue }
+            let url = URL(fileURLWithPath: path)
+            let ext = record.fileExtension
+            guard let text = await Task.detached(priority: .utility, operation: {
+                TextExtractionService.extractText(fileURL: url, utType: "", fileExtension: ext)
+            }).value else { continue }
+
+            record.extractedText = text
+            reclassifyLocally(record)
+            changed = true
+        }
+        if changed { store.saveFiles() }
+    }
+
+    /// Shared tail of the text-backfill migrations above: invalidate the
+    /// search cache for a record whose text just changed, then re-run local
+    /// classification against it exactly like the launch-time self-heal does.
+    private func reclassifyLocally(_ record: FileRecord) {
+        SearchService.invalidateCache(for: record)
+        let local = ClassificationEngine.classify(
+            filename: record.filename,
+            fileExtension: record.fileExtension,
+            extractedText: record.extractedText,
+            ocrText: record.ocrText
+        )
+        record.category = local.category
+        record.subcategory = local.subcategory
+        record.tags = local.tags
+        record.detectedVendor = local.vendor
+        record.detectedDocumentType = local.documentType
+        record.detectedAmount = local.amount
+        record.detectedCurrency = local.currency
+        record.aiConfidence = local.confidence
+        record.classificationReason = local.reason
+        record.processingStatus = local.confidence < CategoryTaxonomy.reviewConfidenceThreshold ? .needsReview : .processed
     }
 
     private func removeStaleResearchReportExpiryRecords() {

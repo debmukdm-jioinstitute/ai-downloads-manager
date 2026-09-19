@@ -62,7 +62,7 @@ struct SearchView: View {
                     searchError = "AI couldn't interpret the query; showing local search results instead."
                 }
             }
-            let localResults = SearchService.search(query: query, in: appState.allFiles(), aiFilters: filters)
+            let localResults = await SearchService.search(query: query, in: appState.allFiles(), aiFilters: filters)
             await MainActor.run {
                 results = localResults
                 isSearching = false

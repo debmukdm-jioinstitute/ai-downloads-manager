@@ -24,14 +24,27 @@ enum SearchService {
     /// instance later, this cache must be invalidated for that file's id.
     private static var textCache: [ObjectIdentifier: (text: [UInt8], ocr: [UInt8], summary: [UInt8])] = [:]
 
-    static func search(query: String, in files: [FileRecord], aiFilters: AISearchFilters?) -> [FileRecord] {
-        searchScored(query: query, in: files, aiFilters: aiFilters).map(\.file)
+    static func search(query: String, in files: [FileRecord], aiFilters: AISearchFilters?) async -> [FileRecord] {
+        await searchScored(query: query, in: files, aiFilters: aiFilters).map(\.file)
     }
 
     /// Same ranking as `search`, but keeps each match's raw relevance score
     /// so callers can show a confidence figure (e.g. normalized against the
     /// top score in the result set) instead of just an ordered list.
-    static func searchScored(query: String, in files: [FileRecord], aiFilters: AISearchFilters?) -> [(file: FileRecord, score: Int)] {
+    ///
+    /// `onProgress` (files scanned so far, total) is reported every
+    /// `progressChunkSize` files with a `Task.yield()` in between, so a
+    /// caller-driven progress bar actually redraws mid-scan instead of
+    /// jumping straight to 100% — real progress over the same fast byte
+    /// scan, not simulated busywork.
+    private static let progressChunkSize = 15
+
+    static func searchScored(
+        query: String,
+        in files: [FileRecord],
+        aiFilters: AISearchFilters?,
+        onProgress: (@MainActor (Int, Int) -> Void)? = nil
+    ) async -> [(file: FileRecord, score: Int)] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return files.map { ($0, 0) } }
         let lowerQuery = trimmed.lowercased()
@@ -40,85 +53,108 @@ enum SearchService {
         let wordBytes = queryWords.map { asciiLowerBytes($0) }
 
         var scored: [(FileRecord, Int)] = []
+        let total = files.count
 
-        for file in files {
-            var score = 0
-            let lowerFilename = file.filename.lowercased()
-
-            // Stage 1: exact / partial filename match.
-            if lowerFilename == lowerQuery { score += 100 }
-            else if lowerFilename.contains(lowerQuery) { score += 40 }
-            for word in queryWords where lowerFilename.contains(word) { score += 15 }
-
-            // Stage 2: metadata (category, subcategory, vendor, document type).
-            // Matches word-by-word in both directions ("ticket" <-> "Tickets")
-            // rather than requiring the *entire* query to appear inside the
-            // field, which silently failed on nearly any plural/singular or
-            // multi-word mismatch.
-            if relates(file.subcategory, to: lowerQuery, words: queryWords) { score += 25 }
-            if relates(file.category, to: lowerQuery, words: queryWords) { score += 20 }
-            if relates(file.detectedVendor, to: lowerQuery, words: queryWords) { score += 30 }
-            if relates(file.detectedDocumentType, to: lowerQuery, words: queryWords) { score += 25 }
-
-            // Stage 3: extracted / OCR / AI-summary text — the fast path.
-            let cached = cachedBytes(for: file)
-            if !cached.text.isEmpty {
-                if byteContains(cached.text, queryPhraseBytes) { score += 15 }
-                for wb in wordBytes where byteContains(cached.text, wb) { score += 3 }
+        for (index, file) in files.enumerated() {
+            if let score = score(file, lowerQuery: lowerQuery, queryWords: queryWords, queryPhraseBytes: queryPhraseBytes, wordBytes: wordBytes, aiFilters: aiFilters), score > 0 {
+                scored.append((file, score))
             }
-            if !cached.ocr.isEmpty {
-                if byteContains(cached.ocr, queryPhraseBytes) { score += 15 }
-                for wb in wordBytes where byteContains(cached.ocr, wb) { score += 3 }
+            let scannedSoFar = index + 1
+            if scannedSoFar % progressChunkSize == 0 || scannedSoFar == total {
+                onProgress?(scannedSoFar, total)
+                await Task.yield()
             }
-            if !cached.summary.isEmpty {
-                for wb in wordBytes where byteContains(cached.summary, wb) { score += 4 }
-            }
-
-            // Stage 4: tags.
-            for tag in file.tags where relates(tag, to: lowerQuery, words: queryWords) { score += 10 }
-
-            // Stage 5: AI-derived structured filters.
-            //
-            // category/vendor/documentType/keywords are the AI's own
-            // classification *guess* for whatever free text it couldn't
-            // otherwise place — proven unreliable on a real query ("ENEL"),
-            // where the local model forced a category guess (the prompt
-            // requires one of a fixed enum) that didn't match the file's
-            // real category, and the resulting hard `continue` filtered out
-            // every file in the library, including one with the word right
-            // in its filename. They now only ever add confidence on a match
-            // and never veto a file that already has real local evidence.
-            //
-            // date/amount/currency stay hard constraints: they only appear
-            // in aiFilters when the query itself contained something
-            // date-or-number-shaped, which a small model has no real
-            // temptation to hallucinate for a query that doesn't.
-            //
-            // But this same small model also doesn't reliably follow "omit
-            // fields you cannot infer" — measured on this exact query, it
-            // filled the *entire* schema anyway: amountMin/amountMax as 0,
-            // currency/vendor/dates as "". Those decode as present-but-empty,
-            // not nil, so every string field is treated as unset when empty
-            // and both amount bounds are ignored at 0 (a real lower bound of
-            // exactly $0 has nothing to constrain; a real upper bound of $0
-            // would exclude everything, which is never what "search" means).
-            if let filters = aiFilters {
-                if let cat = filters.category, !cat.isEmpty, cat.caseInsensitiveCompare(file.category) == .orderedSame { score += 20 }
-                if let vendor = filters.vendor, !vendor.isEmpty, file.detectedVendor?.localizedCaseInsensitiveContains(vendor) == true { score += 20 }
-                if let docType = filters.documentType, !docType.isEmpty, file.detectedDocumentType?.localizedCaseInsensitiveContains(docType) == true { score += 15 }
-                for keyword in filters.keywords ?? [] where !keyword.isEmpty && (relates(keyword, to: lowerQuery, words: queryWords) || lowerFilename.contains(keyword.lowercased())) { score += 5 }
-
-                if let currency = filters.currency, !currency.isEmpty, file.detectedCurrency?.caseInsensitiveCompare(currency) != .orderedSame { continue }
-                if let minAmt = filters.amountMin, minAmt > 0, (file.detectedAmount ?? -1) < minAmt { continue }
-                if let maxAmt = filters.amountMax, maxAmt > 0, (file.detectedAmount ?? .greatestFiniteMagnitude) > maxAmt { continue }
-                if let dateFrom = parseDate(filters.dateFrom), let fileDate = file.detectedDate ?? file.dateDownloaded as Date?, fileDate < dateFrom { continue }
-                if let dateTo = parseDate(filters.dateTo), let fileDate = file.detectedDate ?? file.dateDownloaded as Date?, fileDate > dateTo { continue }
-            }
-
-            if score > 0 { scored.append((file, score)) }
         }
 
         return scored.sorted { $0.1 > $1.1 }
+    }
+
+    /// One file's relevance score, or nil if an objective structured filter
+    /// (date/amount/currency) rules it out outright. Pulled out of the scan
+    /// loop above so progress reporting isn't tangled up with early-exit
+    /// filter logic.
+    private static func score(
+        _ file: FileRecord,
+        lowerQuery: String,
+        queryWords: [String],
+        queryPhraseBytes: [UInt8],
+        wordBytes: [[UInt8]],
+        aiFilters: AISearchFilters?
+    ) -> Int? {
+        var score = 0
+        let lowerFilename = file.filename.lowercased()
+
+        // Stage 1: exact / partial filename match.
+        if lowerFilename == lowerQuery { score += 100 }
+        else if lowerFilename.contains(lowerQuery) { score += 40 }
+        for word in queryWords where lowerFilename.contains(word) { score += 15 }
+
+        // Stage 2: metadata (category, subcategory, vendor, document type).
+        // Matches word-by-word in both directions ("ticket" <-> "Tickets")
+        // rather than requiring the *entire* query to appear inside the
+        // field, which silently failed on nearly any plural/singular or
+        // multi-word mismatch.
+        if relates(file.subcategory, to: lowerQuery, words: queryWords) { score += 25 }
+        if relates(file.category, to: lowerQuery, words: queryWords) { score += 20 }
+        if relates(file.detectedVendor, to: lowerQuery, words: queryWords) { score += 30 }
+        if relates(file.detectedDocumentType, to: lowerQuery, words: queryWords) { score += 25 }
+
+        // Stage 3: extracted / OCR / AI-summary text — the fast path.
+        let cached = cachedBytes(for: file)
+        if !cached.text.isEmpty {
+            if byteContains(cached.text, queryPhraseBytes) { score += 15 }
+            for wb in wordBytes where byteContains(cached.text, wb) { score += 3 }
+        }
+        if !cached.ocr.isEmpty {
+            if byteContains(cached.ocr, queryPhraseBytes) { score += 15 }
+            for wb in wordBytes where byteContains(cached.ocr, wb) { score += 3 }
+        }
+        if !cached.summary.isEmpty {
+            for wb in wordBytes where byteContains(cached.summary, wb) { score += 4 }
+        }
+
+        // Stage 4: tags.
+        for tag in file.tags where relates(tag, to: lowerQuery, words: queryWords) { score += 10 }
+
+        // Stage 5: AI-derived structured filters.
+        //
+        // category/vendor/documentType/keywords are the AI's own
+        // classification *guess* for whatever free text it couldn't
+        // otherwise place — proven unreliable on a real query ("ENEL"),
+        // where the local model forced a category guess (the prompt
+        // requires one of a fixed enum) that didn't match the file's
+        // real category, and the resulting hard `continue` filtered out
+        // every file in the library, including one with the word right
+        // in its filename. They now only ever add confidence on a match
+        // and never veto a file that already has real local evidence.
+        //
+        // date/amount/currency stay hard constraints: they only appear
+        // in aiFilters when the query itself contained something
+        // date-or-number-shaped, which a small model has no real
+        // temptation to hallucinate for a query that doesn't.
+        //
+        // But this same small model also doesn't reliably follow "omit
+        // fields you cannot infer" — measured on this exact query, it
+        // filled the *entire* schema anyway: amountMin/amountMax as 0,
+        // currency/vendor/dates as "". Those decode as present-but-empty,
+        // not nil, so every string field is treated as unset when empty
+        // and both amount bounds are ignored at 0 (a real lower bound of
+        // exactly $0 has nothing to constrain; a real upper bound of $0
+        // would exclude everything, which is never what "search" means).
+        if let filters = aiFilters {
+            if let cat = filters.category, !cat.isEmpty, cat.caseInsensitiveCompare(file.category) == .orderedSame { score += 20 }
+            if let vendor = filters.vendor, !vendor.isEmpty, file.detectedVendor?.localizedCaseInsensitiveContains(vendor) == true { score += 20 }
+            if let docType = filters.documentType, !docType.isEmpty, file.detectedDocumentType?.localizedCaseInsensitiveContains(docType) == true { score += 15 }
+            for keyword in filters.keywords ?? [] where !keyword.isEmpty && (relates(keyword, to: lowerQuery, words: queryWords) || lowerFilename.contains(keyword.lowercased())) { score += 5 }
+
+            if let currency = filters.currency, !currency.isEmpty, file.detectedCurrency?.caseInsensitiveCompare(currency) != .orderedSame { return nil }
+            if let minAmt = filters.amountMin, minAmt > 0, (file.detectedAmount ?? -1) < minAmt { return nil }
+            if let maxAmt = filters.amountMax, maxAmt > 0, (file.detectedAmount ?? .greatestFiniteMagnitude) > maxAmt { return nil }
+            if let dateFrom = parseDate(filters.dateFrom), let fileDate = file.detectedDate ?? file.dateDownloaded as Date?, fileDate < dateFrom { return nil }
+            if let dateTo = parseDate(filters.dateTo), let fileDate = file.detectedDate ?? file.dateDownloaded as Date?, fileDate > dateTo { return nil }
+        }
+
+        return score
     }
 
     /// Call after a file's extracted/OCR/summary text is (re)written, so a

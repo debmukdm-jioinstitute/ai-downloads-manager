@@ -10,6 +10,8 @@ struct OverviewView: View {
     @State private var searchResults: [(file: FileRecord, confidence: Int)] = []
     @State private var isSearching = false
     @State private var searchNotice: String?
+    @State private var scannedCount = 0
+    @State private var totalToScan = 0
 
     private var isSearchActive: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -125,6 +127,15 @@ struct OverviewView: View {
             .padding(10)
             .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
 
+            if isSearching && totalToScan > 0 {
+                VStack(alignment: .leading, spacing: 2) {
+                    ProgressView(value: Double(scannedCount), total: Double(totalToScan))
+                    Text("Scanned \(scannedCount) of \(totalToScan) files…")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if let searchNotice {
                 Text(searchNotice).font(.caption).foregroundStyle(.orange)
             }
@@ -161,6 +172,8 @@ struct OverviewView: View {
         }
         isSearching = true
         searchNotice = nil
+        scannedCount = 0
+        totalToScan = appState.allFiles().count
         Task {
             var filters: AISearchFilters?
             if appState.aiEnabled {
@@ -172,7 +185,10 @@ struct OverviewView: View {
                     }
                 }
             }
-            let scored = SearchService.searchScored(query: trimmed, in: appState.allFiles(), aiFilters: filters)
+            let scored = await SearchService.searchScored(query: trimmed, in: appState.allFiles(), aiFilters: filters) { done, total in
+                scannedCount = done
+                totalToScan = total
+            }
             let maxScore = scored.map(\.score).max() ?? 0
             let withConfidence = scored.map { entry in
                 (file: entry.file, confidence: maxScore > 0 ? Int((Double(entry.score) / Double(maxScore) * 100).rounded()) : 0)
