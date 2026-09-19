@@ -2,6 +2,7 @@ import { FeatureCarousel } from "@/components/FeatureCarousel";
 import { Nav, Logo } from "@/components/Nav";
 import { ProductSlider } from "@/components/ProductSlider";
 import { Reveal } from "@/components/Reveal";
+import { INSTALL_TERMINAL_LINES, TerminalCommands } from "@/components/TerminalCommands";
 import { DMG_URL, GITHUB_URL, RELEASES_URL } from "@/lib/links";
 
 const fileKinds = [
@@ -44,6 +45,17 @@ export default function HomePage() {
           <p className="reveal delay-4 mt-4 text-[12px] text-[#86868b]">
             Apple Silicon · macOS 14 Sonoma or later · Free &amp; open source
           </p>
+
+          <div className="reveal delay-4 hero-terminal-card px-6">
+            <p className="text-[13px] font-semibold tracking-tight text-[#1d1d1f]">
+              After you drag Nest to Applications — paste this in Terminal
+            </p>
+            <p className="mt-2 text-[14px] leading-relaxed text-[#6e6e73]">
+              macOS may say &ldquo;Nest Not Opened.&rdquo; We&apos;re open source, not sketchy — just not App Store–notarized
+              yet. Two commands, zero subscription fees:
+            </p>
+            <TerminalCommands id="hero-terminal" />
+          </div>
         </div>
 
         <div className="relative mx-auto mt-16 max-w-[1100px] px-6">
@@ -102,14 +114,7 @@ export default function HomePage() {
                 If macOS previously showed &ldquo;Nest Not Opened,&rdquo; this is the polite fix — not &ldquo;Move to
                 Bin.&rdquo;
               </p>
-              <div className="install-terminal" aria-label="Terminal commands to install Nest">
-                <code>
-                  <span className="prompt">$ </span>
-                  {"xattr -dr com.apple.quarantine /Applications/Nest.app\n"}
-                  <span className="prompt">$ </span>
-                  open /Applications/Nest.app
-                </code>
-              </div>
+              <TerminalCommands id="install-terminal" />
               <p className="mt-3 text-[13px] text-[#86868b]">
                 Prefer clicks? Right-click Nest in Applications → Open → Open, or run{" "}
                 <span className="font-mono text-[12px] text-[#6e6e73]">Open Nest (First Time).command</span> from the
@@ -311,7 +316,7 @@ export default function HomePage() {
             ],
             [
               "Why does macOS say it can’t verify Nest?",
-              "Downloads get a quarantine flag until you approve them once. Nest isn’t notarized yet (that’s a paid Apple Developer certificate — not a subscription we pass on to you). Run the two Terminal lines on the install section, use the First Time helper in the .dmg, or right-click → Open. Your files still never leave your Mac.",
+              `Downloads get a quarantine flag until you approve them once. Paste in Terminal: ${INSTALL_TERMINAL_LINES[0]} then ${INSTALL_TERMINAL_LINES[1]}. (Or use the copy button at the top of the page.) Nest isn’t notarized yet — that’s Apple’s paid certificate, not a fee we charge you. Your files still never leave your Mac.`,
             ],
             [
               "Is Nest really free?",

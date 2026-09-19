@@ -253,13 +253,46 @@ body {
   background: #28c840;
 }
 
-.install-terminal {
+.install-terminal-wrap {
   margin-top: 1rem;
-  overflow-x: auto;
+  overflow: hidden;
   border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  text-align: left;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.install-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 1rem;
+  background: #2b2b2e;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.install-terminal-copy {
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f5f7;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.install-terminal-copy:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.install-terminal {
+  margin: 0;
+  overflow-x: auto;
   background: #1d1d1f;
   padding: 1.1rem 1.25rem;
-  text-align: left;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -269,12 +302,27 @@ body {
   font-size: 13px;
   line-height: 1.65;
   color: #f5f5f7;
-  white-space: pre;
+}
+
+.install-terminal-line {
+  display: block;
 }
 
 .install-terminal .prompt {
   color: #86868b;
   user-select: none;
+}
+
+.hero-terminal-card {
+  margin: 2rem auto 0;
+  max-width: 640px;
+  text-align: left;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 1.25rem 1.25rem 1.35rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 @media (prefers-reduced-motion: reduce) {
