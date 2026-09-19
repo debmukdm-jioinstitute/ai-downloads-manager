@@ -41,6 +41,18 @@ final class FileIngestPipeline {
               let creation = attrs[.creationDate] as? Date,
               let modification = attrs[.modificationDate] as? Date else { return nil }
 
+        // A file evicted to iCloud ("Optimize Mac Storage") has no local
+        // bytes yet — reading it (hashing, PDF/OCR extraction) silently
+        // blocks the calling thread until it downloads, which can hang for
+        // minutes or forever if offline. Kick off the download and skip for
+        // now; FSEvents (or the next rescan) picks it up once it lands.
+        if let cloudValues = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
+           cloudValues.isUbiquitousItem == true,
+           cloudValues.ubiquitousItemDownloadingStatus != .current {
+            try? fm.startDownloadingUbiquitousItem(at: url)
+            return nil
+        }
+
         // Avoid reprocessing a path we already have an up-to-date record for.
         // If a record exists but the file has actually changed (re-exported,
         // overwritten in place), replace it rather than inserting a second,
@@ -71,7 +83,19 @@ final class FileIngestPipeline {
         store.insertFile(record)
         store.insertActivity(ActivityEvent(kind: .detected, message: "New file detected", filename: name))
 
-        record.contentHash = HashService.sha256(ofFileAt: url)
+        switch await Self.extractContents(url: url, ext: ext, utType: utType) {
+        case .timedOut:
+            record.processingStatus = .needsReview
+            record.processingError = "Timed out reading this file's contents (took longer than \(Int(Self.perFileTimeoutSeconds))s) — it may be a cloud-only, corrupted, or unusually large file."
+            record.isProcessed = true
+            store.insertActivity(ActivityEvent(kind: .classified, message: "Timed out reading file; needs review", filename: name))
+            store.saveFiles()
+            return record
+        case .success(let hash, let text, let ocr):
+            record.contentHash = hash
+            record.extractedText = text
+            record.ocrText = ocr
+        }
 
         if let hash = record.contentHash {
             let others = store.fileRecords(withHash: hash).filter { $0.id != record.id }
@@ -81,13 +105,6 @@ final class FileIngestPipeline {
                 record.duplicateGroupID = groupID
                 store.insertActivity(ActivityEvent(kind: .duplicate, message: "Duplicate of \(firstOther.filename)", filename: name))
             }
-        }
-
-        if ext == "pdf" || ext == "txt" || ext == "csv" || ext == "rtf" {
-            record.extractedText = TextExtractionService.extractText(fileURL: url, utType: utType, fileExtension: ext)
-        }
-        if OCRService.imageExtensions.contains(ext) {
-            record.ocrText = OCRService.recognizeText(imageURL: url)
         }
 
         let local = ClassificationEngine.classify(filename: name, fileExtension: ext, extractedText: record.extractedText, ocrText: record.ocrText)
@@ -110,6 +127,44 @@ final class FileIngestPipeline {
         store.insertActivity(ActivityEvent(kind: .classified, message: "Classified as \(record.category)\(record.subcategory.map { "/\($0)" } ?? "")", filename: name))
         store.saveFiles()
         return record
+    }
+
+    nonisolated private static let perFileTimeoutSeconds: UInt64 = 20
+
+    private enum ContentResult {
+        case success(hash: String?, text: String?, ocr: String?)
+        case timedOut
+    }
+
+    /// Hashing, PDF text extraction, and OCR are synchronous, non-cancellable
+    /// blocking calls. Racing them against a timeout is the only way to stop
+    /// one bad file (corrupt PDF, giant image, stalled network mount) from
+    /// hanging the whole sequential ingest queue forever — a real hang hit
+    /// while recovering the library after a prior incident. The losing task
+    /// (usually the real work, on a timeout) keeps running in the background
+    /// to completion since it can't be preempted, but its result is discarded.
+    nonisolated private static func extractContents(url: URL, ext: String, utType: String) async -> ContentResult {
+        await withTaskGroup(of: ContentResult.self) { group in
+            group.addTask {
+                let hash = HashService.sha256(ofFileAt: url)
+                var text: String?
+                if ext == "pdf" || ext == "txt" || ext == "csv" || ext == "rtf" {
+                    text = TextExtractionService.extractText(fileURL: url, utType: utType, fileExtension: ext)
+                }
+                var ocr: String?
+                if OCRService.imageExtensions.contains(ext) {
+                    ocr = OCRService.recognizeText(imageURL: url)
+                }
+                return .success(hash: hash, text: text, ocr: ocr)
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: perFileTimeoutSeconds * 1_000_000_000)
+                return .timedOut
+            }
+            let result = await group.next() ?? .timedOut
+            group.cancelAll()
+            return result
+        }
     }
 
     private func applyLocal(_ local: LocalClassification, to record: FileRecord) {
