@@ -225,10 +225,16 @@ final class FileIngestPipeline {
         record.detectedAmount = ai.amount ?? record.detectedAmount
         record.detectedCurrency = ai.currency ?? record.detectedCurrency
         record.classificationReason = ai.reason ?? record.classificationReason
+        record.detectedIdentifierNumber = ai.identifierNumber ?? record.detectedIdentifierNumber
+        record.sensitivity = ai.sensitivity ?? record.sensitivity
+        record.suggestedFilename = ai.suggestedFilename ?? record.suggestedFilename
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
         if let dateString = ai.documentDate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            record.detectedDate = formatter.date(from: dateString)
+            record.detectedDate = dateFormatter.date(from: dateString)
+        }
+        if let dueDateString = ai.dueDate {
+            record.detectedDueDate = dateFormatter.date(from: dueDateString)
         }
         var entities: [String] = []
         if let person = ai.person { entities.append(person) }

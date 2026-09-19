@@ -65,6 +65,13 @@ final class AppState: ObservableObject {
     @Published var speechVoiceIdentifier: String {
         didSet { UserDefaults.standard.set(speechVoiceIdentifier, forKey: "speechVoiceIdentifier") }
     }
+    /// Opt-in, off by default: Nest's baseline promise is "files are only
+    /// moved with your review or explicit rule" — this deliberately breaks
+    /// that promise for the two highest confidence tiers only, and only when
+    /// the user has explicitly turned it on.
+    @Published var autoOrganizeConfidentFiles: Bool {
+        didSet { UserDefaults.standard.set(autoOrganizeConfidentFiles, forKey: "autoOrganizeConfidentFiles") }
+    }
 
     let store: LibraryStore
     let ollamaSetup = OllamaSetupCoordinator()
@@ -101,6 +108,7 @@ final class AppState: ObservableObject {
         self.wakeWordEnabled = UserDefaults.standard.bool(forKey: "wakeWordEnabled")
         self.speakResultsAloud = UserDefaults.standard.object(forKey: "speakResultsAloud") as? Bool ?? true
         self.speechVoiceIdentifier = UserDefaults.standard.string(forKey: "speechVoiceIdentifier") ?? ""
+        self.autoOrganizeConfidentFiles = UserDefaults.standard.bool(forKey: "autoOrganizeConfidentFiles")
 
         self.pipeline = FileIngestPipeline(
             store: store,
@@ -271,9 +279,36 @@ final class AppState: ObservableObject {
                 let created = await expiryPipeline.detectAndStore(for: record)
                 if created > 0 { createdAnyExpiryRecord = true }
             }
+            if autoOrganizeConfidentFiles {
+                autoOrganizeIfConfident(record)
+            }
         }
         if createdAnyExpiryRecord {
             await rescheduleExpiryNotifications()
+        }
+    }
+
+    /// Confidence-tiered automation, opt-in via `autoOrganizeConfidentFiles`.
+    /// Only the two highest tiers ever move a file — .confirm (70-84%) and
+    /// below never do, matching the "ask before committing" principle the
+    /// review threshold itself is built on. The 85-94% tier still moves the
+    /// file (per the tier's own definition) but logs a distinctly-worded
+    /// activity entry asking for a glance, rather than silently succeeding
+    /// exactly like the 95%+ tier does.
+    private func autoOrganizeIfConfident(_ record: FileRecord) {
+        guard record.processingStatus != .needsReview,
+              let confidence = record.aiConfidence,
+              let organizer = organizer() else { return }
+        let tier = CategoryTaxonomy.confidenceAction(for: confidence)
+        guard tier == .autoOrganize || tier == .autoOrganizeNotify else { return }
+        guard (try? organizer.moveToCategory(record, category: record.category, subcategory: record.subcategory)) != nil else { return }
+
+        if let suggested = record.suggestedFilename, !suggested.isEmpty {
+            try? organizer.rename(record, to: suggested)
+        }
+
+        if tier == .autoOrganizeNotify {
+            store.insertActivity(ActivityEvent(kind: .classified, message: "Auto-organized (\(Int(confidence * 100))% confident) — worth a quick check", filename: record.filename))
         }
     }
 

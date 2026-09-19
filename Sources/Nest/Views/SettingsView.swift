@@ -68,6 +68,13 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Automation") {
+                Toggle("Automatically organize files Nest is very confident about", isOn: $appState.autoOrganizeConfidentFiles)
+                Text("Off by default — Nest normally never moves or renames a file without your review or an explicit rule. Turning this on lets files scoring 85% confidence or higher be moved into their category folder automatically (and renamed, if AI suggested a clearer name); anything below that always waits for you, exactly as before.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Expiry Notifications") {
                 Toggle("90 days before", isOn: offsetBinding(90))
                 Toggle("30 days before", isOn: offsetBinding(30))

@@ -23,11 +23,17 @@ struct NestApp: App {
                 }
                 .onAppear {
                     voiceCoordinator.start()
-                    // Headless verification hook only: `NEST_FORCE_RESCAN=1` lets a
-                    // Terminal-launched instance trigger the same rescan as the
-                    // Settings "Rescan Now" button, since GUI automation of this
-                    // app's custom SwiftUI list rows is unreliable. Never set by a
-                    // normal Finder/Dock launch, so it can't fire unintentionally.
+                    // Headless verification hooks only, never set by a normal
+                    // Finder/Dock launch: `NEST_ADD_FOLDER=<path>` adds a
+                    // watched folder the same way Settings' "Add Folder..."
+                    // does, and `NEST_FORCE_RESCAN=1` triggers the same
+                    // rescan as "Rescan Now" — both exist because GUI
+                    // automation of this app's custom SwiftUI list rows is
+                    // unreliable for verification.
+                    if let folderPath = ProcessInfo.processInfo.environment["NEST_ADD_FOLDER"] {
+                        appState.addWatchedFolder(URL(fileURLWithPath: folderPath))
+                        FileHandle.standardError.write("NEST_DEBUG: added folder \(folderPath)\n".data(using: .utf8)!)
+                    }
                     if ProcessInfo.processInfo.environment["NEST_FORCE_RESCAN"] == "1" {
                         FileHandle.standardError.write("NEST_DEBUG: env var seen, watchedFolders=\(appState.watchedFolders.map(\.path))\n".data(using: .utf8)!)
                         for folder in appState.watchedFolders {

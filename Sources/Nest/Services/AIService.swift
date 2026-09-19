@@ -10,8 +10,14 @@ struct AIClassificationResult: Codable {
     var person: String?
     var organization: String?
     var documentDate: String?
+    var dueDate: String?
     var amount: Double?
     var currency: String?
+    /// A document-specific identifier — invoice number, passport number,
+    /// PNR, PAN, whatever the document itself uses to identify itself.
+    var identifierNumber: String?
+    /// "low" / "medium" / "high".
+    var sensitivity: String?
     var confidence: Double
     var suggestedFilename: String?
     var reason: String?

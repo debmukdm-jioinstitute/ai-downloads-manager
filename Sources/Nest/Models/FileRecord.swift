@@ -35,8 +35,24 @@ final class FileRecord: Codable, Identifiable, Equatable {
     var detectedVendor: String?
     var detectedDocumentType: String?
     var detectedDate: Date?
+    var detectedDueDate: Date?
     var detectedAmount: Double?
     var detectedCurrency: String?
+    /// A document-specific identifier the AI found — invoice number,
+    /// passport number, PNR, etc. Generic on purpose: which kind of
+    /// identifier it is is already implied by `category`/`subcategory`.
+    var detectedIdentifierNumber: String?
+    /// "low"/"medium"/"high" — the AI's judgment of how sensitive this
+    /// document's contents are (a passport or bank statement vs. a meeting
+    /// agenda). Not currently enforced anywhere; a hook for future features
+    /// (e.g. never reading a high-sensitivity document aloud) rather than a
+    /// promise that low-sensitivity handling exists today.
+    var sensitivity: String?
+    /// AI's suggested rename (e.g. "Amazon Invoice - Sep 2026.pdf"), applied
+    /// only when auto-organizing a high-confidence file — never silently
+    /// applied at classification time, since a rename is more disruptive
+    /// than a category tag if the AI got it wrong.
+    var suggestedFilename: String?
 
     var duplicateGroupID: UUID?
 

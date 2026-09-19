@@ -231,15 +231,21 @@ struct OllamaAIService: AIService {
       "person": null,
       "organization": null,
       "documentDate": null,
+      "dueDate": null,
       "amount": null,
       "currency": null,
+      "identifierNumber": null,
+      "sensitivity": null,
       "confidence": 0.0,
       "suggestedFilename": "",
       "reason": ""
     }
     "category" MUST be exactly one of: \(CategoryTaxonomy.allCategories.joined(separator: ", ")).
     "subcategory" must be one of the valid subcategories for that category.
-    "confidence" is 0.0-1.0, your genuine confidence in this classification.
+    "dueDate" is only for documents with a payment/action deadline distinct from their document date (an invoice's due date, not its issue date) — null otherwise.
+    "identifierNumber" is whatever number the document uses to identify itself: invoice number, passport number, PNR, PAN, policy number. Null if none.
+    "sensitivity" is "low", "medium", or "high" based on how sensitive the document's contents are — a passport or bank statement is "high", a meeting agenda is "low".
+    "confidence" is 0.0-1.0, your genuine confidence in this classification. Be conservative: a document that only vaguely resembles a category should score below 0.7, not be forced to a high number.
     "reason" is a one-sentence, human-readable explanation of why you chose this category.
     """
 
