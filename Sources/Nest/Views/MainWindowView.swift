@@ -58,7 +58,7 @@ struct MainWindowView: View {
             case .fileTypes:
                 FileTypesView(selectedFile: $selectedFile)
             case .expiryCenter:
-                ExpiryCenterView()
+                ExpiryCenterView(selectedFile: $selectedFile)
             case .search:
                 SearchView(selectedFile: $selectedFile)
             case .rules:

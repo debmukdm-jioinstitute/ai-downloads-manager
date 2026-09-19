@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ExpiryCenterView: View {
     @EnvironmentObject var appState: AppState
+    @Binding var selectedFile: FileRecord?
     @State private var searchText = ""
     @State private var statusFilter: ExpiryUrgency?
     @State private var categoryFilter: String?
@@ -174,7 +175,16 @@ struct ExpiryCenterView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .onTapGesture { selectedRecord = record }
+        .onTapGesture { selectFile(for: record) }
+    }
+
+    /// Shows the underlying document's own details/preview in the main
+    /// detail pane — the same thing clicking any file row elsewhere in the
+    /// app does — rather than only the small expiry-specific sheet. The
+    /// "Correct" button above still opens that sheet for editing the date
+    /// itself, which the file preview pane has no equivalent for.
+    private func selectFile(for record: ExpiryRecord) {
+        selectedFile = appState.allFiles().first { $0.id == record.documentID }
     }
 
     @ViewBuilder
@@ -221,9 +231,17 @@ struct ExpiryCenterView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 90, alignment: .trailing)
+            Button {
+                selectedRecord = record
+            } label: {
+                Image(systemName: "calendar.badge.clock")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Edit date or add to Calendar")
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .onTapGesture { selectedRecord = record }
+        .onTapGesture { selectFile(for: record) }
     }
 }
