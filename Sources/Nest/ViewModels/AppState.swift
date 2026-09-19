@@ -138,6 +138,7 @@ final class AppState: ObservableObject {
         }
         reclassifyLocallyClassifiedFiles()
         removeStaleResearchReportExpiryRecords()
+        Task { await upgradeStaleExpiryDetections() }
     }
 
     /// Explicit, user-initiated cleanup for records that don't belong under
@@ -198,6 +199,36 @@ final class AppState: ObservableObject {
     /// never touched (still active, never added to Calendar), the same
     /// "never silently override a real user action" discipline as the file
     /// reclassification self-heal above.
+    /// Self-heal, one-time only: real airline e-tickets almost never use
+    /// words like "departure"/"boarding" near a date (they say "Terminal 2",
+    /// "PNR", "Travel time"), so before those phrases were added to
+    /// ExpiryContextClassifier's keyword list, virtually every flight date
+    /// fell through to the generic 0.35 "no keyword nearby" fallback —
+    /// exactly why every record looked identically unconfident. Fixing the
+    /// keyword list only helps *future* scans unless already-indexed files
+    /// get re-run too, so this clears out every expiry record the user never
+    /// touched (still .active, never added to Calendar) and re-detects them
+    /// with the current rules. Gated to run once, not on every launch — if
+    /// AI is enabled, re-detection makes a real Ollama call per affected
+    /// file, and this isn't meant to become a recurring cost.
+    private func upgradeStaleExpiryDetections() async {
+        let migrationKey = "expiryKeywordSelfHealV1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        UserDefaults.standard.set(true, forKey: migrationKey)
+        guard let expiryPipeline else { return }
+
+        let untouchedIDs = Set(store.expiryRecords.filter { $0.userStatus == .active && $0.calendarEventIdentifier == nil }.map(\.id))
+        guard !untouchedIDs.isEmpty else { return }
+        let affectedDocumentIDs = Set(store.expiryRecords.filter { untouchedIDs.contains($0.id) }.map(\.documentID))
+        store.removeExpiryRecords { untouchedIDs.contains($0.id) }
+
+        for documentID in affectedDocumentIDs {
+            guard let file = store.fileRecords.first(where: { $0.id == documentID }) else { continue }
+            await expiryPipeline.detectAndStore(for: file)
+        }
+        await rescheduleExpiryNotifications()
+    }
+
     private func removeStaleResearchReportExpiryRecords() {
         store.removeExpiryRecords { record in
             guard record.userStatus == .active, record.calendarEventIdentifier == nil else { return false }
@@ -357,6 +388,35 @@ final class AppState: ObservableObject {
         record.updatedAt = Date()
         store.saveExpiryRecords()
         Task { await rescheduleExpiryNotifications() }
+    }
+
+    /// "Confirm" on a low-confidence detection was a no-op: it called
+    /// setExpiryUserStatus(record, status: .active) on a record that was
+    /// already .active (that's the only way it lands in Needs Review in the
+    /// first place — see ExpiryRecord.needsReview), so nothing visibly
+    /// changed. What the user is actually doing is vouching for a detection
+    /// the app itself was unsure about, so that should read as full
+    /// confidence — the same way FileRecord.userApprovedClassification
+    /// treats a user's own correction as ground truth.
+    func confirmExpiryRecord(_ record: ExpiryRecord) {
+        record.confidence = 1.0
+        record.userStatus = .active
+        record.updatedAt = Date()
+        store.saveExpiryRecords()
+        Task { await rescheduleExpiryNotifications() }
+
+        // Confirming the detection is also the user vouching for the whole
+        // record, so file the underlying document away too — using the
+        // FILE's own category/subcategory (already computed by
+        // ClassificationEngine/AI), not the expiry engine's own category
+        // label ("Insurance", "Travel", ...), which is a separate free-text
+        // taxonomy (ExpiryCategoryTaxonomy) that doesn't correspond to real
+        // folder categories at all — "Insurance" isn't even a valid
+        // CategoryTaxonomy entry, so moving by it would just fail.
+        if let file = store.fileRecords.first(where: { $0.id == record.documentID }),
+           let organizer = organizer() {
+            try? organizer.moveToCategory(file, category: file.category, subcategory: file.subcategory)
+        }
     }
 
     func updateExpiryDate(_ record: ExpiryRecord, date: Date) {

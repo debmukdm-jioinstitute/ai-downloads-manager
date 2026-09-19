@@ -42,6 +42,19 @@ struct NestApp: App {
                             appState.scanExistingFiles(in: folder)
                         }
                     }
+                    if let substring = ProcessInfo.processInfo.environment["NEST_CONFIRM_PATH_CONTAINS"] {
+                        if let record = appState.expiryRecords().first(where: { rec in
+                            rec.needsReview && (appState.store.fileRecords.first { $0.id == rec.documentID }?.originalPath.contains(substring) ?? false)
+                        }) {
+                            let file = appState.store.fileRecords.first { $0.id == record.documentID }
+                            FileHandle.standardError.write("NEST_DEBUG: confirming record for \(record.documentFilename), file category before=\(file?.category ?? "-")/\(file?.subcategory ?? "-") path=\(file?.currentPath ?? "-")\n".data(using: .utf8)!)
+                            appState.confirmExpiryRecord(record)
+                            let fileAfter = appState.store.fileRecords.first { $0.id == record.documentID }
+                            FileHandle.standardError.write("NEST_DEBUG: after confirm, needsReview=\(record.needsReview) path=\(fileAfter?.currentPath ?? "-")\n".data(using: .utf8)!)
+                        } else {
+                            FileHandle.standardError.write("NEST_DEBUG: no matching needsReview record found for \(substring)\n".data(using: .utf8)!)
+                        }
+                    }
                 }
         }
         .windowResizability(.contentSize)

@@ -26,8 +26,13 @@ enum ExpiryContextClassifier {
         (["payment due", "due date", "amount due", "due by", "last date for payment"], .dueDate, 0.85),
         (["submission deadline", "application deadline", "deadline", "last date", "closing date", "notice period", "termination notice"], .deadline, 0.8),
         (["renewal date", "renew by", "renewal window", "renews on", "next billing date", "next payment date"], .renewal, 0.8),
-        (["valid from", "effective from", "issued on", "issue date", "date of issue", "policy start", "start date", "coverage begins", "coverage start"], .validFrom, 0.75),
-        (["check-in", "check in", "departure", "flight date", "boarding", "event date", "appointment", "scheduled for", "travel date"], .eventDate, 0.75)
+        (["valid from", "effective from", "issued on", "issue date", "date of issue", "date of booking", "booking date", "policy start", "start date", "coverage begins", "coverage start"], .validFrom, 0.75),
+        // Real airline e-tickets/itineraries almost never use the word
+        // "departure" or "boarding" near the actual date — they say
+        // "Terminal 2", "PNR", "Travel time", airport codes. Verified
+        // against a real e-ticket where every detected flight date fell
+        // through to the 0.35 fallback for exactly this reason.
+        (["check-in", "check in", "departure", "flight date", "boarding", "event date", "appointment", "scheduled for", "travel date", "travel time", "terminal", "pnr", "booking ref", "layover", "connecting flight", "gate"], .eventDate, 0.75)
     ]
 
     // "coverage" alone is too ambiguous to use as an insurance signal — it's

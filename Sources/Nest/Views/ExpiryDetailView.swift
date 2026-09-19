@@ -86,7 +86,7 @@ struct ExpiryDetailView: View {
                     showingEditDate = true
                 }
                 if record.needsReview {
-                    Button("Confirm") { appState.setExpiryUserStatus(record, status: .active) }
+                    Button("Confirm") { appState.confirmExpiryRecord(record) }
                 }
                 Button(record.userStatus == .ignored ? "Un-ignore" : "Ignore", role: record.userStatus == .ignored ? nil : .destructive) {
                     appState.setExpiryUserStatus(record, status: record.userStatus == .ignored ? .active : .ignored)
